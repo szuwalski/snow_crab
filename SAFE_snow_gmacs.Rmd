@@ -1,0 +1,1271 @@
+---
+author: "Grant Adams"
+date: "May 2026"
+output:
+  pdf_document:
+    fig_caption: yes
+    fig_height: 4
+    fig_width: 6
+header-includes:   
+-  \usepackage{pdfpages}
+number_sections: yes
+csl: fish-and-fisheries.csl
+toc: yes
+title: "Preliminary 2026 assessment for eastern Bering Sea snow crab"
+---
+
+```{r, include=FALSE}
+
+rm(list=ls())
+#tinytex::reinstall_tinytex(repository = "illinois")
+knitr::opts_chunk$set(echo=FALSE,message=FALSE,warning=FALSE)
+
+library(plyr)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(PBSmodelling)
+library(pander)
+library(coda)
+library(maps)
+library(lattice)
+library(PBSmapping)
+library(mapdata)    #some additional hires data
+library(maptools)   #useful tools such as reading shapefiles
+library(mapproj)
+library(plotrix)
+library(ggridges)
+library(reshape2)
+library(miceadds)
+library(devtools)
+library(patchwork)
+
+
+```
+
+\newpage
+
+
+```{r GMACS-getModelResults}
+require(wtsGMACS);
+reslst = wtsUtilities::getObj("rda_ModelsResLst.RData");
+cases = names(reslst$repsLst);
+nCases = length(cases);
+strMdls = "models";
+strCases = cases[1]; i=2;
+while (i < nCases) {strCases = paste0(strCases,", ",cases[i]); i=i+1;}
+if (nCases != 1) strCases = paste0(strCases," and ",cases[nCases]);
+if (nCases == 1) strMdls = "model";
+strCases = stringr::str_replace_all(strCases,stringr::fixed("_"),".")
+
+```
+
+\newpage
+
+```{r,echo=F,message=FALSE,warning=F,include=FALSE}
+
+ABC_buffer  <-0.8
+chosen_ind<-1
+OFL_fleet_ind<-0
+fldrs = c("25_gmacs/","25_gmacs_v2/")
+
+do_size_comps<-0 # turn this off when iterating on documents because it takes a long time
+case_for_resids<-"25.1 gmacs" # change this to the model you want to print size comp residuals for
+case_for_data_table<-"25.1 gmacs"
+if(do_size_comps==1)
+{
+  ##--size comps from Buck----
+  dfrZCs = wtsGMACS::extractRep1Results(reslst,"Size_fit_summary") |> 
+             dplyr::mutate(
+               dplyr::across(c(year,size,inpSS,inpN,aggObs,aggPrd,aggRes),
+                             as.numeric)
+             );
+  flts = (dfrZCs |> dplyr::distinct(fleet))$fleet;
+  dfrUFCs = dfrZCs |> dplyr::distinct(origID,aggID,fleet,comp_type,sex,maturity,shell_cond,case) |> 
+             dplyr::mutate(fleet=factor(fleet,levels=flts))
+  dfrUFCs = dfrUFCs |> 
+             dplyr::inner_join(dfrUFCs |> 
+                               dplyr::group_by(aggID,case) |> 
+                               dplyr::summarize(ext=dplyr::n()) |> 
+                               dplyr::ungroup(),by=c("aggID","case"));
+  dfrUZCs = dfrUFCs |> 
+             dplyr::distinct(comp_type,fleet,ext,sex,maturity,shell_cond) |>
+             dplyr::arrange(comp_type,fleet,dplyr::desc(ext),dplyr::desc(sex),maturity,shell_cond);
+  pltZCs<-function(dfrZCs,dfrUFCs,dfrUZC){
+    dfrUFC = dfrUFCs |> dplyr::inner_join(dfrUZC,by=names(dfrUZC));#--pick unique fleet, bio cats, & cases
+    tmp = dfrZCs |> dplyr::inner_join(dfrUFC,by=names(dfrUFC)[names(dfrUFC)!="ext"]);
+    str = paste(dfrUZC$fleet,dfrUZC$comp_type);
+    if (dfrUZC$shell_cond!="undetermined") str = paste(str,dfrUZC$shell_cond);
+    if (dfrUZC$maturity  !="undetermined") str = paste(str,dfrUZC$maturity);
+    if (dfrUZC$sex       !="undetermined") str = paste0(str," ",dfrUZC$sex,"s");
+    p = compareFitsZCs(tmp,subtitle=str);
+    return(p);
+  }
+
+   for (i in 1:length(unique(dfrZCs$origID)))
+    {
+     tmp<-filter(dfrZCs,origID==as.character(i))
+     names(tmp)
+     
+   p<- ggplot()+
+      geom_bar(data=tmp,
+               aes(x=as.numeric(as.character(size)),y=aggObs),
+               stat = "identity", position = "identity",col='lightgrey',fill='lightgrey')+
+      geom_line(data=tmp,aes(x=as.numeric(as.character(size)),y=aggPrd,col=case))+
+      facet_wrap(~year)+theme_bw()+xlab("Carapace width (mm)")+ylab("Proportion")+
+     ggtitle(paste(tmp$fleet[1],"/",tmp$sex[1],"/",tmp$comp_type[1],"/",tmp$maturity[1]))
+    
+
+    png(paste("plots/size_comp_",i,".png",sep=""),height=8,width=8,res=300,units='in')
+    print(p)
+    dev.off()
+
+#==
+  use<-filter(tmp,case==case_for_resids)
+  use$raw_res<-use$aggObs-use$aggPrd
+   out_plot<-ggplot(use)+
+    geom_point(aes(y=size,x=year,size=abs(raw_res),col=as.factor(sign(raw_res))),alpha=.9)+
+    theme_bw()+xlab("Year")+ylab("Carapace width (mm)")+
+    labs(col="Residual direction",size="Raw residual size")
+
+  png(paste("plots/size_comp_resid_",i,".png",sep=""),height=10,width=8,res=300,units='in')
+  print(out_plot)
+  dev.off()
+   }
+}
+
+
+
+ #=================================
+ # this code pulls the projections for selected models
+ # to do the projections, follow these steps:
+ # this requires a converged model with a hessian
+ # make a new folder with the model to project in it, specify projection details in .PROJ file
+ # .PROJ file needs to change strategies
+ # save .par file as .pin file
+ # run '.\gmacs.exe -phase 6 -nohess -mcmc 1 -mcsave 1'
+ # that executes one draw (at the MLE) of MCMC and saves the results
+ # run '.\gmacs.exe -mceval -noest' in that folder to write output to 'mcoutPROJ.REP'
+ # run code below to pull relevant info, be sure to modify years to make 'mcoutPROJ.REP'
+
+# BE SURE TO CHANGE THE F IN THE PROJ FILE TO THE FOFL
+proj_dir<-paste0(dirname(getwd()), "/snow_crab/25_gmacs/")
+
+do_proj<-0
+
+if(do_proj==1)
+{
+ proj_dirs<-c(paste(proj_dir,"proj/mcoutPROJSSB.REP",sep=''))
+
+ proj_mmb_under_ofl<-rep(NA,length(proj_dirs))
+ proj_stat_ofl<-rep(NA,length(proj_dirs))
+ proj_mmb_under_nof<-rep(NA,length(proj_dirs))
+ proj_stat_nof<-rep(NA,length(proj_dirs))
+
+ for(x in 1:length(proj_dirs))
+ {
+  innames<-c("Draw","Replicate","Treatment",paste("F",seq(1,4)),
+             "B35",seq(1982,2035))
+  projfile<-as.data.frame(matrix(scan(proj_dirs[x],skip=1),ncol=length(innames),byrow=TRUE))
+  colnames(projfile)<-innames
+
+  proj_mmb_under_ofl[x]<-filter(projfile,Treatment==2)$'2025'[1]
+  proj_stat_ofl[x]<-proj_mmb_under_ofl[x]/filter(projfile,Treatment==2)$'B35'[1]
+
+  proj_mmb_under_nof[x]<-filter(projfile,Treatment==1)$'2025'[1]
+  proj_stat_nof[x]<- proj_mmb_under_nof[x]/filter(projfile,Treatment==2)$'B35'[1]
+}
+}
+
+make_proj_fig<-0
+if(make_proj_fig==1)
+{
+#==make a figure that shows projections under given assumptions about rec and M and F
+yams<-melt(projfile[,c(1,2,3,4,9:ncol(projfile))],id.vars=c("Draw","Replicate","Treatment","F 1"))
+yams$Treatment<-c("No fishing","OFL")[yams$Treatment]
+meds<-yams%>%
+  group_by(Treatment,variable)%>%
+  summarize(med_ssb=median(value))
+
+#==compare to survey biomass
+fldrs = c("25_gmacs_func/")
+ tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
+ male_wt_len<-as.numeric(filter(reslst$repsLst$'25.3 gmacs'$IndivWeightByXM,Sex=="male"&Year=="1982"&Maturity=='mature')[,4:25])
+
+  #==mature males
+  st<-grep(c("N(males): dataframe"),tmp,fixed=TRUE)
+  tmp2<-tmp[st:(st+50)]
+  tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
+      
+  N_males<-NULL
+  for(x in 1:length(tmp3))
+    N_males<-rbind(N_males,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+  
+  
+  sweep1<-sweep(N_males[,3:ncol(N_males)],2,male_wt_len,FUN='*')
+  sizes<-seq(27.5,132.5,5)
+  mat_95<-rep(0,length(sizes))
+  mat_95[sizes>95]<-1  
+  mat_95[sizes<95&sizes>90]<-0.5
+  sweep2<-apply(sweep(sweep1,2,mat_95,FUN='*'),1,sum)/1000000
+  surv_lg_male<-data.frame(Year=N_males[,1],MMB=sweep2)
+
+  png(paste("plots/projections.png",sep=""),height=8,width=8,res=300,units='in')
+ ggplot()+
+  geom_line(data=yams,aes(x=as.numeric(as.character(variable)),y=value,col=as.factor(Treatment),group=interaction(Replicate,Treatment)),alpha=.3)+
+  geom_line(data=meds,aes(x=as.numeric(as.character(variable)),y=med_ssb,col=as.factor(Treatment)),lwd=2)+
+    geom_line(data=filter(meds,as.numeric(as.character(variable))<2026),aes(x=as.numeric(as.character(variable)),y=med_ssb,col=as.factor(Treatment)),lwd=2,col='grey')+
+  theme_bw()+ylab("MMB (>=95mm)")+
+  xlab("Year")+labs(color="Fishing")+ylim(0,900)+
+  geom_line(data=surv_lg_male,aes(x=Year,y=MMB))
+dev.off()
+}
+
+```
+
+\newpage
+
+\listoftables
+
+\newpage
+
+\listoffigures
+
+\newpage
+
+
+# Executive summary
+
+
+\newpage
+# B. Comments, responses and assessment summary
+## SSC and CPT comments + author responses from June 2025
+
+*SSC comments in italics*
+Author response
+
+
+INSERT ALL COMMENTS AND HOW THIS DOC ADDRESSES THEM (OR DOESN'T)
+
+\newpage
+
+# C. Assessment scenarios
+## Model summaries
+
+The key assumptions of these models include: 
+
+ * the probability of terminally molting at size varies over time and size and is specified based on observations from the survey data
+ 
+ * survey selectivity is estimated by era (1982-88; 1989-present) and sex as a non-parametric curve subject to priors based on the BSFRF survey efficiency experiment data
+ 
+ * growth is a linear function of pre-molt carapace width with a specified variability around post-molt size
+ 
+ * all immature crab molt
+ 
+ * natural mortality is estimated by sex and maturity state with additional mortality events estimated in 2018 and 2019 and subject to a prior based on an assumed longevity of 20 years
+ 
+ * total and retained fishery selectivity are estimated logistic curves
+ 
+ * all non-directed bycatch (e.g. snow crab caught in the Tanner crab fishery or crab caught in the non-pelagic trawl fisheries) is lumped into a single 'fishery' for which a single selectivity is estimated
+ 
+ * recruitment is estimated separately for females and males and is allocated in the first 3 size bins
+ 
+
+# F. Analytic approach
+
+
+## Model description
+
+The Generalized Model for Assessing Crustacean Stocks (GMACS) was adopted as the assessment platform for snow crab in 2022 after a demonstration that GMACS could effectively reproduce the dynamics of the status quo model and offered structural improvements. GMACS is an integrated, size-structured model developed using automatic differentiation software developed as a set of libraries under C++ (ADModel Builder).  ADModel Builder can estimate a large number of parameters in a non-linear model using automatic differentiation software extended from Greiwank and Corliss (1991) and developed into C++ class libraries.  GMACS version 2.20.22 was used for the author-preferred model.
+
+The snow crab population dynamics model tracks the number of crab of sex *s*,  maturity state *m*, during year *y* at width *w*, N~*s,m,y,w*~. A terminal molt was modeled in which crab move from an immature to a mature state, after which no further molting occurred. The mid-points of the size bins tracked in the model spanned from 27.5 to 132.5 mm carapace width, with 5 mm size classes. For the author-preferred model, 407 parameters were estimated. Parameters estimated within the assessment included those associated with the population processes recruitment, growth, natural mortality (subject to an informative prior and two years of additional 'mortality events' estimated in 2018 and 2019), fishing mortality, selectivity (fisheries and survey), and catchability. The yearly probability of undergoing terminal molt, weight at size, discard mortality, bycatch mortality, variance in growth increment, and parameters associated with proportion of recruitment allocated to size bin were estimated outside of the model or specified. See the GMACS repo linked at the end of this document to peruse the control files that specify the populations dynamics.  
+
+A 'jittering' approach has been historically used to explore the impact of different starting values on the assessment output (Turnock, 2016). Jittering was implemented for both models with 2025 data. Retrospective analyses were also performed here in which the terminal year of data was removed sequentially from the model fitting process. Then time series of estimated MMB were compared between the most recent model and successive 'peels' of the data to identify retrospective patterns. A retrospective pattern is a consistent directional change in assessment estimates of management quantities (e.g. MMB) in a given year when additional years of data are added to an assessment. Parameter values were jittered based on a normal distribution centered on one with a standard deviation of 0.1 that was then translated to the parameter space defined by the initial value and its bounds.  
+
+A single population dynamics model is presented here, with the differences among the model runs related to data inputs and assumptions about reference points or currency of management. 
+
+## Model selection and evaluation
+Models were evaluated based on their fit to the data, evidence of non-convergence, the credibility of the estimated population processes, and the strength of the influence of the assumptions of the model on the outcomes of the assessment. 
+
+## Results
+### Model convergence and comparison 
+Model 25.3 produced a small maximum gradient and produced a Hessian matrix. However, jittering produced two clouds of 'converged' models with OFLs that differed by 5,000 tonnes and negative log likelihoods that differed by ~0.2 units (\autoref{jitter}). Repeating the jittering for a model that uses large males as currency produced two clouds of OFLs with a difference of approximately 1,000 tonnes (\autoref{jitter95}). The difference in OFLs from both of these jittering runs resulted from differences in the terminal estimates of MMB, which were driven by differences in estimated recruitment in the recent past (\autoref{jitt_rec}). Bimodality in management quantities has been a reoccurring problem in the assessment for snow crab. Below, the results for '25.3 gmacs' (i.e. the model with morphometrically MMB used as currency) and '25.3 gmacs (>=95mm)' are derived from the model that had the lowest negative log likelihood from 100 jitters. 
+
+The model had difficulties fitting the terminal year of female biomass and potential fixes were explored (e.g. inputting a yearly varying probability of terminal molt), but none yielded markedly different results from model '25.3 gmacs', so were not included here. This issue will be explored more fully for the May 2026 meeting.
+
+### Model fits
+Fits to the survey indices of mature biomass were similar among models, even with the revision of the data (\autoref{mmbfits}). Updating the version of GMACS resulted in a downward revision of the 2018 mature female biomass estimate. 
+
+In May 2025, convergence issues arose with the addition of new growth data. This was solved in this assessment by only including data points for sizes modeled within the assessment model and using smaller input CVs for the points over 35 mm pre-molt carapace width for females. This is a range in which there were fewer observations which were historically poorly fit because of the abundance of data at smaller sizes. No changes were made to the CVs for male growth increment data. Updating the growth data in this manner resulted in changes in estimated molt increments given pre-molt carapace width for both males and females (\autoref{growthfits}).The estimated molt increments for males were smaller than historical estimates for smaller pre-molt carapace width until approximately 60mm carapace width, when the estimated molt increments began to be larger than historical estimates. 
+
+Fits to the non-directed fishery catches were good for both the original and revised data sets (\autoref{catchfits}). However, in the directed fishery, fits deteriorated somewhat with the updated dataset. Although most of the retained catch data were still fit well, the model was unable to capture several years of discarded data that historically were well fit (e.g. 1991, 1994 and 2019).  
+
+Only small differences were observed among models in the fits to size composition data for retained catch in the directed fishery, with the most recently occuring fishery (2021) showing the largest differences (\autoref{size_comp_1}). Fits to the total size composition data from the directed fishery were distinctly different once the growth data were updated in the models (\autoref{size_comp_2}). No visually discernible differences among models existed for female discards from the directed fishery (\autoref{size_comp_3}). Fits to the non-directed fishery had some of the largest misfits of all data sources (particularly for male data), but this is unsurprising given a single estimated selectivity curve and potential changes in fishery behavior over time (\autoref{size_comp_4} & \autoref{size_comp_5}).
+
+Fits to the survey size composition data were broadly similar between the two models in most years (\autoref{survcomp_fits_m_imm} - \autoref{survcomp_fits_f_mat2}). Both models had issues fitting the size composition data for mature males immediately after the collapse, which could suggest some unmodelled size-based mortality (\autoref{survcomp_fits_m_mat}). 
+
+### Estimated population processes
+The estimated abundance of commercially preferred of male crab (arguably the most important output of the assessment) varied among models (\autoref{obs_101_vs_pred}). The early years during which differences in survey selectivity occurred were particularly different. Both models agreed that the abundance in recent years have been the lowest in the time series. The estimates of the most recent era of survey selectivity were fairly similar across models for both sexes (\autoref{select_prior}).  
+
+Estimated fisheries selectivities were similar for both models (\autoref{predselectfish}). Estimated fully-selected fishing mortality for the directed fishery was highly variable and relatively high for most of the fishery history (\autoref{predfmort}). The total fishery selectivity curve is shifted far to the right, so only the largest crab are experiencing the fully-selected fishing mortality. The probability of undergoing terminal molt used to separate crab into immature and mature survey indices were input as data to the assessment (\autoref{predmat}). 
+
+Trends in recruitment were very similar across models, with some variability in scale and differences in timing between the sexes (\autoref{recruits}). Differences in estimated recruitment in the most recent years were also observed for males among models and this appears to have contributed to the differences in OFLs among jittering runs. 
+
+Base estimates of natural mortality were similar for mature animals of both sexes, except for immature females, which were much higher with the new growth data and weighting scheme (\autoref{nat_m}). All models estimated mortality events that removed at least 80% of crab by sex and maturity state (except for mature females) at some point during the marine heatwave of 2018-19.
+
+### MMB and management quantities
+Estimated MMB time series had similar trends but the scales differed by up to ~50% in some years (\autoref{predmmb}). The scale of MMB when large males were used in the calculation was predictably much lower than when morphometrically mature males were used, but the trends were similar. It should be noted that these values are calculated after the fishery, so the declining trends in these estimates are much larger, particularly for the large males, if MMB is calculated before the fishery (see discussion below). Changes in these estimates over the last ten assessment can be seen in \autoref{hist_mmb}.
+
+Differences in estimates and currencies of MMB resulted in large differences in the management targets and advice (\autoref{stepchange}; discussed below). All models that use morphometrically mature male biomass as the currency of management produced target fishing mortality rates that would allow for the removal of all of the largest male crab. 
+
+# G. Calculation of the OFL
+## Methodology for OFL 
+### Tier 3
+Historically, the tier 3 OFL was calculated using proxies for biomass and fishing mortality reference points and a sloped control rule. Proxies for biomass and fishing mortality reference points were calculated using spawning-biomass-per-recruit methods (e.g. Clark, 1991). After fitting the assessment model to the data and estimating population parameters, the model was projected forward 100 years using the estimated parameters under no exploitation and constant recruitment to determine 'unfished' mature male biomass-per-recruit. Projections were repeated in which the bisection method was used to identify a fishing mortality that reduced the mature male biomass-per-recruit to 35% of the unfished level (i.e. F~35%~ and B~35%~). Calculations of F~*35%*~ were made under the assumption that bycatch fishing mortality was equal to the estimated average value over the last 10 years. 
+
+Calculated values of F~35%~ and B~35%~ were used in conjunction with a Tier 3 control rule to adjust the proportion of F~35%~ that is applied to the stock based on the status of the population relative to B~35%~ (Amendment 24, NMFS). To determine the F~OFL~, the population is projected to the time of fishing for the upcoming fishery under no fishing. If the MMB at that time exceeds 25% of B~35%~, a fishery can occur and the F~OFL~ is calculated as:
+
+\begin{equation}
+ F_{OFL} =
+ \begin{cases}
+ Bycatch  & if \frac{MMB}{B_{35}} \leq 0.25 \\[3ex]
+ \frac {F_{35} ( \frac {MMB}{B_{35}} - \alpha)}{1-\alpha}  & if 0.25 < \frac {MMB}{B_{35}} < 1 \\[3ex]
+ F_{35} & if MMB > B_{35}
+\end{cases}
+\end{equation}
+
+Where MMB is the projected morphometrically mature male biomass in the current survey year after fishing at the F~*OFL*~, B~*35%*~ is the mature male biomass at the time of mating resulting from fishing at F~*35%*~, F~*35%*~ is the fishing mortality that reduces the morphometrically mature male biomass per recruit to 35% of unfished levels, and $\alpha$ determines the slope of the descending limb of the harvest control rule (set to 0.1 here). 
+
+In addition to the status quo tier 3 control rule, a variation in which >=95mm carapace width mature male biomass was used as the currency of management is presented here.
+
+Calculated tier 3 OFLs ranged from 3.26 to 44.29 kt (\autoref{stepchange}). Differences in OFLs were a result of differences in estimated MMB and the currency used for MMB.  
+
+### Tier 4
+Tier 4 HCRs were applied to rema-smoothed survey biomass estimates of three different size ranges: morphometrically mature males, large males (>=95mm), and preferred males (>101mm). The target biomass was set as the average of the time series from 1982-2024 and the target fishing mortality was set as 0.27, the median of the prior on natural mortality used in the integrated assessment. No kink exists in this harvest control rule. The resulting OFLs were 28.41 kt, 8.64 kt, and 6.11 kt for morphometric, large, and preferred males, respectively (\autoref{tier4}). 
+
+
+# Calculation of the ABC
+
+The recommended acceptable biological catch (ABC) was calculated by subtracting a 20% buffer from the OFL to account for scientific uncertainty.
+
+The buffers for the last five years used by the SSC were: 65% (2024), 50% (2023), (October 2022 SSC reports are not available online), 25% (2021), and 25% (2020).
+
+ \newpage
+ 
+## Author recommendations
+
+
+# I. Data gaps and research priorities
+
+
+
+# K. Supplemental information
+
+Input and output for the models described here can be found at https://github.com/szuwalski/snow_2025_9. 
+
+GMACS code and documentation can be found at: https://github.com/GMACS-project.
+
+\newpage
+
+# L. References
+
+Chilton, E.A., C.E. Armisted and R.J. Foy.  2009.  Report to industry on the 2009 Eastern Bering Sea crab survey.  AFSC Processed Report 2009-XX.
+
+Clark, W.G. 1991. Groundfish exploitation rates based on life history parameters. Can. J. fish. Aquat. Sci. 48: 734-750.
+
+Conan, G.Y. and Comeau, M. 1986. Functional maturity and terminal molt of male snow crab. Can J. Fish Aqaut Sci. 43(9): 
+
+Dawe, E.G., D.M. Taylor, J.M. Hoenig, W.G. Warren, and G.P. Ennis.  1991.  A critical look at the idea of terminal molt in male snow crab (Chionoecetes opilio).  Can. J. Fish. Aquat. Sci. 48: 2266-2275.
+
+Ennis, G.P., Hooper, R.G. Taylor, D.M. 1988. functional maturity in smalle male snow crab. Can J Fish Aquat Sci. 45(12): 
+
+Ernst, B, J.M.(Lobo) Orensanz and D.A. Armstrong.  2005.  Spatial dynamics of female snow crab (Chionoecetes opilio) in the eastern Bering Sea.  Can. J. Fish. Aquat. Sci. 62: 250-268.
+
+Fonseca, D. B., B. Sainte-Marie, and F. Hazel. 2008. Longevity and change in shell condition of adult male snow crab Chionoecetes opilio inferred from dactyl wear and mark-recapture data. Transactions of the American Fisheries Society 137:1029-1043.
+
+Fournier, D.A. and C.P. Archibald. 1982.  A general theory for analyzing catch-at-age data. Can.J.Fish.Aquat.Sci. 39:1195-1207.
+
+Greiwank, A. and G.F. Corliss(eds). 1991.  Automatic differentiation of algorithms:  theory, implementation and application.  Proceedings of the SIAM Workshop on the Automatic Differentiation of Algorithms, held Jan. 6-8, Breckenridge, CO. Soc. Indust. And Applied Mathematics, Philadelphia.
+
+Hamel, O. 2015. A method for calculating a meta-analytical prior for the natural mortality rate using multiple life history correlates. ICES Journal of Marine Science. 72: 62-69.
+
+Hoenig, J. 1983.  Empirical use of longevity data to estimate mortality rates.  Fish. Bull. 82: 898-903.
+
+Lang, C. A., J. I. Richar, and R. J. Foy. 2019. The 2018 eastern Bering Sea continental shelf and northern Bering Sea trawl surveys: Results for commercial crab species. U.S. Dep. Commer., NOAA Tech. Memo. NMFS-AFSC-386, 220 p.
+
+McAllister, M.K. and Ianelli, J.N. 1997. Bayesian stock assessment using catch-at-age data and the sampling importance resampling algorithm. Can. J. Fish. Aquat. Sci. 54(2): 284-300.
+
+Mcbride (1982).  Tanner crab tag development and tagging experiments 1978-1982.  In Proceedings of the International Symposium of the Genus Chionoecetes.  Lowell Wakefield Fish. Symp. Ser., Alaska Sea Grant Rep. 82-10.  University of Alaska, Fairbanks, Alaska. Pp. 383-403.
+
+Methot, R. D.  1990.  Synthesis model: An adaptable framework for analysis of diverse stock assessment data.  Int. N. Pac. Fish. Comm. Bull. 50:259-277.
+
+Murphy, J.T. Rugolo, L.J., Turnock, B.J. 2018. Estimation of annual, time-varying natural mortality and survival for Eastern Bering Sea snow crab (Chionoecetes opilio) with state-space population models. Fish Res 205: 122-131.
+
+Murphy, J.T. Rugolo, L.J., Turnock, B.J. 2017. Integrating demographic and environmental variables to calculate an egg production index for the Eastern Bering Sea snow crab (Chionoecetes opilio). Fisheries Research. 193: 143-157.
+
+Murphy, J. T., A. B. Hollowed, J. J. Anderson.  2010.  Snow crab spatial distributions: examination of density-dependent and independent processes.  Pp. 49-79. In G. Kruse, G. Eckert, R. Foy, G. Kruse, R. Lipcius, B. St. Marie, D. Stram, D. Woodby (Eds.), Biology and management of Exploited Crab Populations Under Climate Change.  Alaska Sea Grant Program Report AK-SG-10-01, University of Alaska Fairbanks, AK. Doi:10.4027/bmecppc.2010.19
+
+Myers, R.A. 1998. When do environment-recruitment correlations work? Reviews in Fish Biology and Fisheries. 8(3): 285-305.
+
+Nevissi, A.E., J.M. Orensanz, A.J.Paul, and D.A. Armstrong. 1995.  Radiometric Estimation of shell age in Tanner Crab, Chionoecetes opilio and C. bairdi, from the eastern Bering Sea, and its use to interpret indices of shell age/condition.  Presented at the International symposium on biology, management and economics of crab from high latitude habitats October 11-13, 1995, Anchorage, Alaska.
+
+NPFMC (North Pacific Fishery Management Council).  2007.  Environmental Assessment for Amendment 24.  Overfishing definitions for Bering Sea and Aleutian Islands King and Tanner crab stocks.  North Pacific Fishery Management Council,Anchorage, AK, USA..
+
+NPFMC (North Pacific Fishery Management Council).  2000.  Bering Sea snow crab rebuilding plan.  Amendment 14.  Bering Sea Crab Plan Team, North Pacific Fishery Management Council,Anchorage, AK, USA..
+
+NPFMC 1998. Bering Sea and Aleutian Islands Crab FMP.  Bering Sea Crab Plan Team, North Pacific Fishery Management Council, P. O. Box 103136, Anchorage, Ak 99510.
+
+Orensanz, J.M., J. Armstrong, D. Armstrong and R. Hilborn. 1998.  Crustacean resources are vulnerable to serial depletion - the multifaceted decline of crab and shrimp fisheries in the Greater Gulf of Alaska.  Reviews in Fish Biology and Fisheries 8:117-176.
+
+Otto, R.S. 1998.  Assessment of the eastern Bering Sea snow crab, Chionoecetes opilio, stock under the terminal molting hypothesis.  In Proceedings of the North Pacific Symposium on Invertebrate Stock Assessment and Management.  Edited by G.S. Jamieson and A. Campbell. Can. Spec. Publ. Fish. Aquat. Sci. 125.  pp. 109-124.
+
+Parada, C., Armstrong, D.A., Ernst, B., Hinckley, S., and Orensanz, J.M. 2010. Spatial dynamics of snow crab (Chionoecetes opilio) in the eastern Bering Sea--Putting together the pieces of the puzzle. Bulletin of Marine Science. 86(2): 413-437.
+
+Paul, A.J., J.M. Paul and W.E. Donaldson.  1995.  Shell condition and breeding success in Tanner crab.  Journal of  Crustacean Biology 15: 476-480.
+
+Restrepo, V.R, G.G. Thompson, P.M. Mace, W.L. Gabriel, L.L. Low, A.D. MacCall, R.D. Methot, J E. Powers, B.L. Taylor, P.R. Wade, and J.F. Witzig.  1998.  Technical guidance on the use of precautionary approaches to implementing National Standard 1 of the Magnuson-Stevens Fishery Conservation and Management Act.  NOAA Technical Memorandum NMFS-F/SPO-31.
+
+Rugolo, L.J., D. Pengilly, R. MacIntosh and K. Gravel.  2005.  Reproductive dynamics and life-history of snow crab (Chionoecetes opilio) in the eastern Bering Sea.  Final Completion Report to the NOAA, Award NA17FW1274, Bering Sea Snow Crab Fishery Restoration Research.
+
+Rodionov, S. 2004. A sequential algorithm for testing climate regime shifts. Geophysical Research Letters 21: L09204.
+
+Sainte-Marie, B., Raymond, S., and Brethes, J. 1995.  Growth and maturation of the male snow crab, Chionoecetes opilio (Brachyura: Majidae). Can.J.Fish.Aquat.Sci. 52:903-924.
+
+Sainte-Marie, B., J. Sevigny and M. Carpentier.  2002.  Interannual variability of sperm reserves and fecundity of primiparous females of the snow crab (Chionoecetes opilio) in relation to sex ratio.  Can.J.Fish.Aquat.Sci. 59:1932-1940. 
+
+Somerton, D.A. and Otto, R.S. 1999. Net efficiency of a survey trawl for snow crab and Tanner crab. Fish Bull 97: 617-625.
+
+Somerton, D.A. Weinberg, K.L., Goodman, S.E. 2013. Catchability of snow crab by the eastern Bering Sea bottom trawl survey estimated using a catch comparison experiment.  Can.J.Fish.Aquat.Sci. 70: 1699-1708.
+
+Szuwalski, C.S. 2022a. Stock assessment of Eastern Bering Sea snow crab. Stock Assessment and Fishery Evaluation Report for the King and Tanner Crab Fisheries of the Bering Sea and Aleutian Islands Regions. 2021 Crab SAFE. North Pacific Fishery Management Council,1007 West 3rd Ave., Suite 400, L92 Building, 4th floor. Anchorage, AK 99501
+
+Szuwalski, C.S. 2021a. Stock assessment of Eastern Bering Sea snow crab. Stock Assessment and Fishery Evaluation Report for the King and Tanner Crab Fisheries of the Bering Sea and Aleutian Islands Regions. 2021 Crab SAFE. North Pacific Fishery Management Council,1007 West 3rd Ave., Suite 400, L92 Building, 4th floor. Anchorage, AK 99501
+
+Szuwalski, C.S. 2021b. An exploration of assessment options for eastern Bering Sea snow crab that consider additional time-variation in population processes. North Pacific Fishery Management Council,1007 West 3rd Ave., Suite 400, L92 Building, 4th floor. Anchorage, AK 99501
+
+Szuwalski, C.S. 2020a. Stock assessment of Eastern Bering Sea snow crab. Stock Assessment and Fishery Evaluation Report for the King and Tanner Crab Fisheries of the Bering Sea and Aleutian Islands Regions. 2021 Crab SAFE. North Pacific Fishery Management Council,1007 West 3rd Ave., Suite 400, L92 Building, 4th floor. Anchorage, AK 99501
+
+Szuwalski, C.S., Cheng, W., Foy. R., Hermann. A.J., Hollowed, A.B., Holsman, K., Lee, J., Stockhausen, W., Zheng, J.  2020b. Climate change and the future productivity and distribution of crab in the eastern Bering Sea. ICES J. Mar. Sci. 78(2): 502-515.
+
+Szuwalski, C.S. 2019a. Stock assessment of Eastern Bering Sea snow crab. Stock Assessment and Fishery Evaluation Report for the King and Tanner Crab Fisheries of the Bering Sea and Aleutian Islands Regions. 2021 Crab SAFE. North Pacific Fishery Management Council,1007 West 3rd Ave., Suite 400, L92 Building, 4th floor. Anchorage, AK 99501
+
+Szuwalski, C.S. 2019b. A summary of model runs requested by the CPT. North Pacific Fishery Management Council,1007 West 3rd Ave., Suite 400, L92 Building, 4th floor. Anchorage, AK 99501
+
+Szuwalski, C.S. 2018a. Stock assessment of Eastern Bering Sea snow crab. Stock Assessment and Fishery Evaluation Report for the King and Tanner Crab Fisheries of the Bering Sea and Aleutian Islands Regions. 2021 Crab SAFE. North Pacific Fishery Management Council,1007 West 3rd Ave., Suite 400, L92 Building, 4th floor. Anchorage, AK 99501
+
+Szuwalski, C.S. 2018b. A summary of model runs requested by the CPT. North Pacific Fishery Management Council,1007 West 3rd Ave., Suite 400, L92 Building, 4th floor. Anchorage, AK 99501
+
+Szuwalski, C.S. 2017a. Stock assessment of Eastern Bering Sea snow crab. Stock Assessment and Fishery Evaluation Report for the King and Tanner Crab Fisheries of the Bering Sea and Aleutian Islands Regions. 2021 Crab SAFE. North Pacific Fishery Management Council,1007 West 3rd Ave., Suite 400, L92 Building, 4th floor. Anchorage, AK 99501
+
+Szuwalski, C.S. and Punt, A.E. 2013. Regime shifts and recruitment dynamics of snow crab, Chionoecetes opilio, in the eastern Bering Sea.  Fisheries Oceanography, 22: 345-354.
+
+Szuwalski, C.S. and Punt, A.E. 2012. Fisheries management for regime-based ecosystems: a management strategy evaluation for the snow crab fishery in the eastern Bering Sea.  ICES Journal of Marine Science. 70: 955-967.
+
+Tamone, S.L., M. Adams and J.M. Dutton.  2005.  Effect of eyestalk ablation on circulating ecdysteroids in hemolymph of snow crab Chionoecetes opilio:  physiological evidence for a terminal molt.  Integr. Comp. Biol., 45(120), p.166-171.
+
+Then, A. Y., Hoenig, J. M., Hall, N. G., and Hewitt, D. A. 2015. Evaluating the predictive performance of empirical estimators of natural mortality rate using information on over 200 fish species. ICES Journal of Marine Science, 72: 82–92.
+
+Turnock, B.J. 2016. Snow crab assessment model scenarios and convergence testing. Alaska Fishery Science Center.
+
+watson, J. 1972. Mating behavior in the spider crab, Chionoecetes opilio. J Fish REs Boar Can 29: 447-449.
+
+Zheng, J., S. Siddeek, D. Pengilly, and D. Woodby.  2002.  Overview of recommended harvest strategy for snow crab in the Eastern Bering Sea.  Regional Information Report No. 5J02-03. Alaska Department of Fish and Game.  Juneau, Alaska.
+
+Zheng, J., G.H. Kruse, and D.R. Ackley.  2001. Spatial distribution and recruitment patterns of snow crab in the eastern Bering Sea.  Spatial Processes and management of marine populations. Alaska sea grant college program. AK-SG-01-02, 2001. 
+
+
+
+
+
+
+
+```{r,echo=FALSE,warning=FALSE,message=F}
+
+
+
+tot_likes<-matrix(nrow=9,ncol=length(fldrs))
+rownames(tot_likes)<-seq(1,9)
+for(y in 1:length(fldrs))
+    {
+      tmp<-readLines(paste(fldrs[y],"/Gmacsall.out",sep=''))
+      st<-grep("Likelihoods_by_type",tmp)[1]
+      for(z in 1:9)
+      {
+        if(y==1)
+        {
+        bleh<-unlist(strsplit(tmp[st+z],split=' '))
+        tot_likes[z,y]<-as.numeric(bleh[grep(":",bleh)+1])
+        }
+       if(y>=2)
+       {
+        bleh<-unlist(strsplit(tmp[st+z],split=' '))
+        tot_likes[z,y]<-as.numeric(bleh[2])
+        rownames(tot_likes)[z]<-bleh[1]
+       }
+      }
+}
+
+colnames(tot_likes) = c("25.1 gmacs","25.1 gmacs (tbd)")
+rownames(tot_likes)[1:5]<-c("Catch","Index","Size","SRR","Tag")
+ kable(round(tot_likes[-8,],2),split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{like_comp_tot}Likelihood components by category and model.")
+
+
+```
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F}
+
+
+# keep_like_big<-NULL
+# for(y in 1:length(fldrs))
+#     {
+#       tmp<-readLines(paste(fldrs[y],"/Gmacsall.out",sep=''))
+#       if(y==1)
+#        st<-grep("Raw likelihood",tmp)
+#       if(y>1)
+#        st<-grep("Raw_likelihood",tmp)
+#       keep_like<-NULL
+#       for(z in 1:(length(st)-1))
+#       {
+#         bleh<-unlist(strsplit(tmp[st[z]],split=' '))
+#        if(y>1)
+#         keep_like<-c(keep_like,round(as.numeric(bleh[3:length(bleh)]),2))
+#        if(y==1)
+#         keep_like<-c(keep_like,round(as.numeric(bleh[4:length(bleh)]),2))
+#       }
+#       keep_like_big<-cbind(keep_like_big,keep_like)
+# }
+# 
+# colnames(keep_like_big) = colnames(fldrs)
+# rownames(keep_like_big) <- c("Retained","Discard (male)","Discard (female)","Non-directed",
+#                             "NMFS 1982-89 (m)","NMFS 1989-present(m)","NMFS 1982-88 (f)","NMFS 1989-present (f)",
+#                             "Retained SC","Total SC","Discard SC (f)","Bycatch SC (f)","Bycatch SC (m)",
+#                             "NMFS 1982-89 (imm m)","NMFS 1989-present(imm m)","NMFS 1982-88 (imm f)","NMFS 1989-present (imm f)",
+#                             "NMFS 1982-89 (mat m)","NMFS 1989-present(mat m)","NMFS 1982-88 (mat f)","NMFS 1989-present (mat f)",
+#                             "Growth","")
+#  kable(keep_like_big[-nrow(keep_like_big),],split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{like_ind}Individual likelihood components by model.")
+
+
+```
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F}
+
+#==get catch 
+
+estpars<-dcast(reslst$dfrPars[,c(2,3,6,7)],param~case, fun.aggregate = mean)
+estpars[,2:3]<-round(estpars[,2:3],2)
+
+#==table catch
+kable(estpars,caption="\\label{est_par} Parameters estimated in the assessment. 'Theta' parameters are primarily the values for initial numbers at size. See control file for more in depth descriptions.") 
+
+
+```
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F}
+
+tmp<-paste("reslst$repsLst$'",case_for_data_table,"'$Catch_fit_summary",sep='')
+input<-eval(parse(text=tmp))
+PlotTab<-dcast(input[,c(2,3,5,6,8)],year~sex+fleet+type,value.var=c("obs"))
+colnames(PlotTab)<- c("Year","Discard (females)","Discard (males)","Retained catch (kt)","Non-directed bycatch")
+rownames(PlotTab)<- NULL
+PlotTab<-data.frame(Year=as.numeric(PlotTab$Year),
+                    a=as.numeric(PlotTab$'Discard (females)'),
+                    b=as.numeric(PlotTab$'Discard (males)'),
+                    s=as.numeric(PlotTab$'Retained catch (kt)'),
+                    d=as.numeric(PlotTab$'Non-directed bycatch'))
+
+PlotTab[is.na(PlotTab)]<-0
+
+colnames(PlotTab)<-c("Year",'Discard (females)','Discard (males)','Retained catch','Non-directed bycatch')
+pander(round(PlotTab,2),split.cells=10,caption="\\label{obscatch}Observed retained catches, discarded catch, and bycatch. Discards and bycatch do not have assumed mortalities applied. Units are 1,000 tonnes.")
+
+
+```
+
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F}
+
+
+PlotTab<- data.frame(Model=fldrs,
+                     MMB=rep(0,length(fldrs)),
+                     B35=rep(0,length(fldrs)),
+                     F35=rep(0,length(fldrs)),
+                     FOFL=rep(0,length(fldrs)),
+                     OFL=rep(0,length(fldrs)),
+                     M=rep(0,length(fldrs)),
+                     avg_rec=rep(0,length(fldrs)),
+                     Status=rep(0,length(fldrs)))
+
+take_row<-c(1,2,3,4,8,12,13)
+keep_out<-matrix(nrow=length(fldrs),ncol=length(take_row))
+colnames(keep_out)<-seq(1,ncol(keep_out))
+for(y in 1:length(fldrs))
+    {
+      tmp<-readLines(paste(fldrs[y],"/Gmacsall.out",sep=''))
+      st<-grep("BMSY",tmp)[1]
+      end<-grep("Ofl",tmp)[length(grep("Ofl",tmp))]
+      use<-tmp[st:end]
+for(x in 1:length(take_row))
+ {
+  if(x<4)
+   keep_out[y,x]<-as.numeric(strsplit(use[take_row[x]],split=" ")[[1]][3])
+    if(x>=4)
+   keep_out[y,x]<-as.numeric(strsplit(use[take_row[x]],split=" ")[[1]][4])
+  colnames(keep_out)[x]<-strsplit(use[take_row[x]],split=" ")[[1]][1]
+}
+}
+sq_tk<-PlotTab[,c(3,9,6,4,5)]
+colnames(sq_tk)<-colnames(keep_out[,c(1:5)])
+man_tab<-round(keep_out[,c(1:5)],2)
+rownames(man_tab) = fldrs
+
+ kable(man_tab,split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{stepchange}Management quantities derived from maximum likelihood estimates by model using Tier 3 reference points. Reported natural mortality is for mature males, average recruitment is for males, and status and MMB were estimates for February 15 of the completed crab year.")
+
+
+```
+
+\newpage
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F}
+
+ tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
+ tmp2<-paste("reslst$repsLst$'",case_for_data_table,"'$IndivWeightByXM",sep='')
+ input<-eval(parse(text=tmp2))
+
+ male_wt_len<-as.numeric(filter(input,Sex=="male"&Year=="1982"&Maturity=='mature')[,4:25])
+ female_wt_len<-as.numeric(filter(input,Sex=="female"&Year=="1982"&Maturity=='mature')[,4:25])
+
+  #==mature males
+  st<-grep(c("N(males_mature): dataframe"),tmp,fixed=TRUE)
+  tmp2<-tmp[st:(st+50)]
+  tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
+      
+  N_males_mat<-NULL
+  for(x in 1:length(tmp3))
+    N_males_mat<-rbind(N_males_mat,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+       
+  #==mature females
+  st<-grep(c("N(females_mature): dataframe"),tmp,fixed=TRUE)
+  tmp2<-tmp[st:(st+50)]
+  tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
+      
+  N_females_mat<-NULL
+  for(x in 1:length(tmp3))
+    N_females_mat<-rbind(N_females_mat,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+       
+  dfrIndxFit = wtsGMACS::extractRep1Results(reslst,"Index_fit_summary") |> 
+               dplyr::mutate(
+                dplyr::across(c(year,obs,base_CV,actual_CV,q,prd,prsn_res),
+                              as.numeric)
+               ) |> 
+               dplyr::mutate(lba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2))),
+                             uba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2)),lower.tail=FALSE));
+  zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
+  nZBs = length(zBs);
+  dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |> 
+             dplyr::filter(type=="capture",
+                           fleet %in% c("NMFS_Trawl_1982 ","NMFS_Trawl_1989")) |>
+             tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
+             dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
+
+  use_sel<-filter(dfrSel,year=="2023"&case==case_for_data_table&sex=='male')$est
+  
+  tFMB<-filter(dfrIndxFit,sex=='female',case==case_for_data_table)$prd
+  #tFMB<-c(tFMB[1:38],0,tFMB[39:length(tFMB)])
+  
+  tMMB<-filter(dfrIndxFit,sex=='male',case==case_for_data_table)$prd
+  #tMMB<-c(tMMB[1:38],0,tMMB[39:length(tMMB)]) 
+  
+  males_bio_size<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,male_wt_len,FUN='*')
+  males_95_bio_size<-males_bio_size[,15:ncol(males_bio_size)]
+  males_101_bio_size<-males_bio_size[,16:ncol(males_bio_size)]
+  males_101_bio_size[,1]<-males_101_bio_size[,1]*.5
+  
+  males_n_size_sel<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,use_sel,FUN='*')
+  males_bio_size_sel<-sweep(males_n_size_sel,2,male_wt_len,FUN='*')
+  males_95_bio_size_sel<-males_bio_size_sel[,15:ncol(males_bio_size_sel)]
+  males_101_bio_size_sel<-males_bio_size_sel[,16:ncol(males_bio_size_sel)]
+  males_101_bio_size_sel[,1]<-males_101_bio_size_sel[,1]*.5
+  
+  tot_95_bio<-apply(males_95_bio_size,1,sum)/1000000
+  tot_101_bio<-apply(males_101_bio_size,1,sum)/1000000
+  sel_95_bio<-apply(males_95_bio_size_sel,1,sum)/1000000
+  sel_101_bio<-apply(males_101_bio_size_sel,1,sum)/1000000
+  
+  males_n_size_sel<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,use_sel,FUN='*')
+  males_101_n_size_sel<-males_n_size_sel[,16:ncol(males_n_size_sel)]
+  males_101_n_size_sel[,1]<-males_101_n_size_sel[,1]*.5
+  
+  males_n_size_tot<-N_males_mat[,3:ncol(N_males_mat)]
+  males_101_n_size_tot<-males_n_size_tot[,16:ncol(males_n_size_tot)]
+  males_101_n_size_tot[,1]<-males_n_size_tot[,1]*.5
+  
+  tot_101_abn<-apply(males_101_n_size_tot,1,sum)/1000
+  sel_101_abn<-apply(males_101_n_size_sel,1,sum)/1000
+  
+   tmp_mat2<-data.frame(year=N_females_mat[,1],
+                      FMB=tFMB,
+                      MMB=tMMB,
+                      MMB_95=sel_95_bio,
+                      MMB_101=sel_101_bio,
+                      abund_101=sel_101_abn,
+                      FMB_tot=apply(sweep(N_females_mat[,3:ncol(N_females_mat)],2,female_wt_len,FUN='*'),1,sum)/1000000 ,
+                      MMB_tot=apply(sweep(N_males_mat[,3:ncol(N_females_mat)],2,male_wt_len,FUN='*'),1,sum)/1000000,
+                      MMB_95_tot=tot_95_bio,
+                      MMB_101_tot=tot_101_bio,
+                      abund_101_tot=tot_101_abn)
+  
+  write.csv(round(tmp_mat2,2),'for_ben.csv')
+  
+PlotTab<- data.frame(round(tmp_mat2,2))
+colnames(PlotTab)<- c("Survey year","FMB","MMB","MMB_95","MMB_101","Abund_101","FMB_tot",
+                      "MMB_tot","MMB_95_tot","MMB_101_tot","abund_95_tot")
+
+#write.csv(PlotTab,"model_est.csv")
+
+ rownames(PlotTab)<- NULL
+ pander(PlotTab,split.cells=10,split.table=Inf,caption="\\label{predsurvbio}Maximum likelihood estimates of morphometrically mature male biomass (MMB), mature female biomass (FMB). Columns 2-6 are subject to survey selectivity; columns 7-11 are the population values. ")
+
+```
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F}
+
+ #==tot males#==tot malesWeight
+  tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
+  st<-grep(c("N(males): dataframe"),tmp,fixed=TRUE)
+  tmp2<-tmp[st:(st+50)]
+  tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
+      
+  N_males<-NULL
+  for(x in 1:length(tmp3))
+    N_males<-rbind(N_males,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+
+  #==tot_females    
+  st<-grep(c("N(females): dataframe"),tmp,fixed=TRUE)
+  tmp2<-tmp[st:(st+50)]
+  tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
+  N_females<-NULL
+  for(x in 1:length(tmp3))
+    N_females<-rbind(N_females,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+  
+ tmp_mat<-data.frame(year=N_females[,1],
+            tot_n=apply(N_males[,3:ncol(N_males)]+N_females[,3:ncol(N_females)],1,sum)/1000000)
+
+colnames(tmp_mat)<- c("Survey year","Total numbers")
+pander(tmp_mat,split.cells=10,split.table=Inf,caption="\\label{predtotnum} Maximum likelihood estimates of total numbers of crab (billions), not subject to survey selectivity at the time of the survey. ")
+
+```
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F}
+
+ dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
+          dplyr::select(case,year,SSB,rec_male,)
+ dfrr<-filter(dfr,case==case_for_data_table)
+
+ tmp2<-paste("reslst$repsLst$'",case_for_data_table,"'$'Fully-selected_FM_by_season_sex_and_fishery'",sep='')
+ input<-eval(parse(text=tmp2))
+ in_f<-as.numeric(filter(input,sex=='male'&fleet=="Pot_Fishery")$'2')
+ 
+  tmp_mat<-data.frame(year=dfrr$year,
+                     mmb=round(as.numeric(dfrr$SSB),2),
+                     recruits=round(as.numeric(dfrr$rec_male)/1000000,2),
+                     f_mort=round(in_f,2))
+ 
+colnames(tmp_mat)<- c("Survey year","Mature male biomass","Male recruits","Fishing mortality")
+
+rownames(tmp_mat)<- NULL
+pander(tmp_mat,split.cells=10,caption="\\label{predsurvbio_tot} Maximum likelihood estimates of large mature male biomass at mating, male recruitment (billions), and fully-selected total fishing mortaltiy. ")
+
+```
+
+\newpage
+
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{jitter}Directed OFLs resulting from 100 jitter runs for the model using morphometrically mature crab as currency."}
+
+
+#include_graphics("plots/jittered_ofl.png")
+
+```
+
+\newpage
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{jitt_rec}Estimated recruitment time series from two jitters runs from different 'clouds' of the previous plot."}
+
+
+#include_graphics("plots/jitter_rec.png")
+
+```
+
+
+
+\newpage
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,fig.width=8.5,fig.height=8,fig.cap="\\label{mmbfits}Model fits to the observed mature biomass at survey."}
+
+
+##--index catch data----
+dfrIndxFit = wtsGMACS::extractRep1Results(reslst,"Index_fit_summary") |> 
+               dplyr::mutate(
+                dplyr::across(c(year,obs,base_CV,actual_CV,q,prd,prsn_res),
+                              as.numeric)
+               ) |> 
+               dplyr::mutate(lba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2))),
+                             uba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2)),lower.tail=FALSE));
+
+
+colnames(dfrIndxFit)[c(13,14,15)]<-c('predicted','residuals','model')
+
+##--go back to this when data consistent across models?----
+  p = ggplot(dfrIndxFit,aes(x=year,colour=model)) +
+        geom_point(aes(y=obs),col='black',position = position_dodge(width = 1)) +
+        geom_line(aes(y=predicted),lwd=1.1) +
+        geom_errorbar(aes(x=year,ymin = lba, ymax = uba), width = 0.2,col='black') +
+        scale_y_continuous(limits=c(0,NA)) +
+        labs(y="NMFS Survey Biomass  (1,000's t)") +
+        facet_wrap(~sex,ncol=1,scales="free_y")  +theme_bw()
+ print(p)
+
+
+
+
+
+```
+
+\newpage
+
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,fig.width=8,fig.height=6,fig.cap="\\label{growthfits}Model fits (colored lines) to the growth data (dots). Black dots are historical observations; red dots are new data for 2025."}
+
+
+ dfrMnGr = wtsGMACS::extractRep1Results(reslst,"Mean growth") |> 
+              dplyr::mutate(dplyr::across(3:5,as.numeric));
+
+ ggplot(dfrMnGr)+
+  geom_line(aes(x=premolt_size,y=mean_increment,col=case))+
+  facet_wrap(~sex)+
+  theme_bw()
+
+ #==add data
+
+```
+
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,fig.width=8,fig.height=8,fig.cap="\\label{catchfits}Model fits to catch data."}
+
+   dfrCatFit = wtsGMACS::extractRep1Results(reslst,"Catch_fit_summary") |> 
+              dplyr::mutate(
+                dplyr::across(c(year,obs,cv,effort,HM,prd,rsd),
+                              as.numeric)
+              );
+
+   
+colnames(dfrCatFit)[c(13,14,15)]<-c('predicted','residuals','model')
+plot_dat<-dfrCatFit
+
+##--catch data----
+levels(plot_dat$sex)[1]<-"Non-directed bycatch"
+
+  p = ggplot(plot_dat,aes(x=year,colour=model)) + 
+        geom_point(aes(y=obs)) + 
+        geom_line(aes(y=predicted)) + 
+        scale_y_continuous(limits=c(0,NA)) + 
+        labs(y="Catch (1,000's t)") + 
+        facet_wrap(sex~type,ncol=1,scales="free_y")  +theme_bw()
+
+print(p)
+
+```
+
+\newpage
+
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{size_comp_1}Model fits (lines) to the retained catch size composition data (grey bars)."}
+
+include_graphics("plots/size_comp_1.png")
+
+
+```
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{size_comp_2}Model fits (lines) to the total catch size composition data (grey bars)."}
+
+include_graphics("plots/size_comp_2.png")
+
+
+```
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{size_comp_3}Model fits (lines) to the female discard size composition data (grey bars)."}
+
+include_graphics("plots/size_comp_3.png")
+
+```
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{size_comp_4}Model fits (lines) to the male non-directed fishery size composition data (grey bars)."}
+
+include_graphics("plots/size_comp_4.png")
+
+```
+
+\newpage
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{size_comp_5}Model fits (lines) to the female non-directed size composition data (grey bars)."}
+
+include_graphics("plots/size_comp_5.png")
+
+
+```
+
+\newpage
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_m_imm}Model fits to immature male survey size composition data from 1982-1988."}
+
+include_graphics("plots/size_comp_6.png")
+```
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_f_imm}Model fits to immature female survey size composition data from 1982-1988."}
+
+include_graphics("plots/size_comp_8.png")
+```
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_m_mat}Model fits to mature male survey size composition data from 1982-1988."}
+include_graphics("plots/size_comp_7.png")
+```
+
+\newpage
+
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_f_mat}Model fits to mature female survey size composition data from 1982-1988."}
+include_graphics("plots/size_comp_9.png")
+            
+```
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_m_imm2}Model fits to immature male survey size composition data from 1989-present."}
+
+include_graphics("plots/size_comp_10.png")
+```
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_f_imm2}Model fits to immature female survey size composition data from 1989-present."}
+
+include_graphics("plots/size_comp_12.png")
+```
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_m_mat2}Model fits to mature male survey size composition data from 1989-present."}
+include_graphics("plots/size_comp_11.png")
+```
+
+\newpage
+
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_f_mat2}Model fits to mature female survey size composition data from 1989-present."}
+include_graphics("plots/size_comp_13.png")
+            
+```
+
+
+
+
+\newpage
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{obs_101_vs_pred}Estimated biomass of male crab >101mm carapace width from the survey (black line and dots with gray 95th CI) and from each model in the assessment (colored lines)."}
+EBSdata	<-read.csv("data/survey_lg_males.csv")
+#==make upper and lower CIs
+EBSdata$upper_bio_ci<-exp(log(EBSdata$BIOMASS_MT)+1.96*(sqrt(log(1+EBSdata$BIOMASS_MT_CV^2))))
+EBSdata$lower_bio_ci<-exp(log(EBSdata$BIOMASS_MT)-1.96*(sqrt(log(1+EBSdata$BIOMASS_MT_CV^2))))
+EBSdata$upper_abn_ci<-exp(log(EBSdata$ABUNDANCE)+1.96*(sqrt(log(1+EBSdata$ABUNDANCE_CV^2))))
+EBSdata$lower_abn_ci<-exp(log(EBSdata$ABUNDANCE)-1.96*(sqrt(log(1+EBSdata$ABUNDANCE_CV^2))))
+  
+#==take predicted survey
+dfrN_YXMSZ = wtsGMACS::extractRep1Results(reslst,"N_YXMSZ") |> 
+                tidyr::pivot_longer(cols=!c(case,year,sex,maturity,shell_con),
+                                    names_to="size",
+                                    values_to="est") |> 
+                dplyr::mutate(dplyr::across(c(year,size,est),
+                                            as.numeric),
+                              xm=paste(maturity,sex)
+                             );
+
+pred_101_n2<-filter(dfrN_YXMSZ,sex=='male'&size>101)%>%
+  group_by(year,case)%>%
+  dplyr::summarize(ABN=sum(est))
+
+pred_101_n3<-filter(dfrN_YXMSZ,sex=='male'&size==97.5)%>%
+  group_by(year,case)%>%
+  dplyr::summarize(ABN=3/5*sum(est))
+
+pred_101_n2$tot_ABN<-(pred_101_n2$ABN+pred_101_n3$ABN)
+
+
+ male_101<-EBSdata
+ div_n<-1000
+ large_males2<-ggplot()+
+   geom_ribbon(data=male_101,aes(x=YEAR,ymin=lower_abn_ci/div_n,ymax=upper_abn_ci /div_n),fill='light grey')+
+   geom_line(data=male_101,aes(x=YEAR,y=ABUNDANCE/div_n))+
+   geom_point(data=male_101,aes(x=YEAR,y=ABUNDANCE/div_n))+
+   geom_line(data=pred_101_n2,aes(x=year,y=tot_ABN,color=case),lwd=1.1,alpha=0.6)+
+   theme_bw()+
+   theme(legend.position='bottom')+
+   expand_limits(y=0)+
+   xlab("")+
+   scale_y_continuous(name="Abundance (1,0000,000s)",position='left',limits=c(0,650000))
+
+  print(large_males2)
+
+
+
+```
+
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=7,fig.cap="\\label{select_prior}Estimated survey selectivity (lines) with normal priors derived from BSFRF selectivity experiment data. Points are the mean of the prior at a given size; intervals are 95th quantiles based on input CVs. "}
+
+
+ #--selectivity----
+  zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
+  nZBs = length(zBs);
+  dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |> 
+             dplyr::filter(type=="capture",
+                           fleet %in% c("NMFS_Trawl_1982 ","NMFS_Trawl_1989")) |>
+             tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
+             dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
+ 
+ colnames(dfrSel)[c(5,7)]<-c("model","probability")
+ plot_dat<-dfrSel[,c(5,1,2,3,4,6,7)]
+ plot_dat$type[plot_dat$type=="capture"]<-"Capture"
+ use_sel<-filter(plot_dat,type%in%c('capture','Capture')&fleet=="NMFS_Trawl_1989")
+      p <- ggplot() + expand_limits(y = c(0,1))+
+      geom_line(data=use_sel,aes(x=size,y=probability,col=model,linetype=type),lwd=1.1)+
+      #geom_pointrange(data=sel_prior,aes(x=size, y=mu, ymax = upper, ymin = lower), col = "black")+
+      facet_wrap(~fleet+sex,ncol=1)+theme_bw()+
+      xlab("Carapace width (mm)")+
+      ylab("Selectivity")+theme(legend.position='bottom')
+ 
+
+ print(p)     
+      
+      
+      
+
+```
+
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,fig.height=8,fig.width=8,fig.cap="\\label{predselectfish}Estimated selectivities by fishing fleet and sex for capture and retained catches. "}
+
+zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
+nZBs = length(zBs);
+dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |> 
+           dplyr::filter(type!="discard",
+                         fleet %in% c("Pot_Fishery","Trawl_Bycatch")) |>
+           tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
+           dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
+
+
+ colnames(dfrSel)[c(5,7)]<-c("model","probability")
+ plot_dat<-dfrSel
+ plot_dat$type[plot_dat$type=="capture"]<-"Capture"
+  fish_mdf<-filter(plot_dat,fleet%in%c("Pot_Fishery","Trawl_Bycatch"))
+  levels(fish_mdf$fleet)[2]<-"Non-directed bycatch"
+  fish_mdf$type[fish_mdf$type=="retained"]<-"Retained"
+    p <- ggplot(fish_mdf) + expand_limits(y = c(0,1))+
+      geom_line(aes(x=size,y=probability,col=model,linetype=type),lwd=1.15,alpha=.75)+
+      facet_wrap(~fleet+sex)+theme_bw()+theme(legend.position='bottom')
+ 
+     print(p)
+
+  
+```
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{predfmort}Estimated fishing mortalities for the directed and non-directed fisheries."}
+
+    dfrFMbyXFY = wtsGMACS::extractRep1Results(reslst,"Fully-selected_FM_by_season_sex_and_fishery") |> 
+              tidyr::pivot_longer(cols=!c("case","sex","fleet","year"),
+                                  names_to="season",
+                                  values_to="est") |> 
+              dplyr::mutate(
+                dplyr::across(c(year,est),as.numeric)
+              ) |> 
+              dplyr::group_by(case,fleet,season) |> 
+              dplyr::filter(sum(est)>0) |> 
+              dplyr::ungroup();
+ crbFshs = c("Pot_Fishery","Trawl_Bycatch")
+    
+ colnames(dfrFMbyXFY)[c(4,6)]<-c("model","F")
+  dfrFMbyXFY$sex[dfrFMbyXFY$sex=="male"]<-"Male"
+  dfrFMbyXFY$sex[dfrFMbyXFY$sex=="female"]<-"Female"
+ 
+ plot_dat<-dfrFMbyXFY[,c(4,3,2,1,5,6)]
+ levels(plot_dat$fleet)[2]<-"Non-directed bycatch"
+ ggplot(data = plot_dat) + 
+   geom_line(aes(x=year, y=F,col=model,group=model),lwd=1.25,alpha=.6)+ 
+   facet_grid(fleet ~ season + sex,scale='free_y') + 
+   theme_bw()+
+   theme(legend.position=c(.2,.8))
+
+```
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{predmat}Estimated (black line) or specified (colored lines) probability(s) of maturing for male crab."}
+
+ tmp2<-paste("reslst$outsLst$'",case_for_data_table,"'$mature_probability",sep='')
+ tmp<-eval(parse(text=tmp2))
+   plotdat<-melt(tmp,id.vars=c("Sex","Year"))
+   colnames(plotdat)[3:4]<-c("width","prob")
+   plotdat[,3]<-as.numeric(as.character(plotdat[,3]))
+   plotdat[,4]<-as.numeric(plotdat[,4])
+   p <- ggplot() +
+        expand_limits(y = c(0, 1)) +
+        labs(x = "Carapace width (mm)", y ="Probability of terminal molt")+ 
+     geom_line(data=plotdat, aes(x = width, y = prob,col = Year,group=Year),lwd=1.15,alpha=.8)+
+     guides(linetype='none')+
+     theme_bw()+theme(legend.position='bottom')+
+     facet_wrap(~Sex)
+    print(p)
+    
+    
+
+```
+
+\newpage
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{recruits}Estimated recruitment by sex (bottom) and proportions recruiting to length bin (top) by model."}
+
+
+  dfr_m = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
+          dplyr::select(case,year,rec_male)
+  dfr_f = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
+          dplyr::select(case,year,rec_female) 
+
+dfr_m$sex<-"Male"
+colnames(dfr_m)<-c("model","Year","Recruits","sex")
+dfr_f$sex<-"Female"
+colnames(dfr_f)<-c("model","Year","Recruits","sex")
+
+plot_dat<-rbind(dfr_f[,c(3,4,2,1)],dfr_m[,c(3,4,2,1)])
+
+plot_dat$Recruits<-as.numeric(plot_dat$Recruits)
+plot_dat$Year<-as.numeric(plot_dat$Year)
+ggplot(plot_dat)+
+  geom_line(aes(x=Year,y=Recruits,col=model),lwd=1.15)+
+  theme_bw()+facet_wrap(~sex,ncol=1,scales='free_y')
+ 
+
+``` 
+
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{nat_m}Estimated natural mortality by sex and maturity state. Natural mortality in all years previous to 2018 and after 2019 are equal to the estimated M in 2017. "}
+
+     dfrMbyXM = wtsGMACS::extractRep1Results(reslst,"Natural_mortality-by-class") |> 
+                 tidyr::pivot_longer(cols=!c(case,year,sex,maturity),
+                                    names_to="size",values_to="est") |> 
+                dplyr::mutate(dplyr::across(c(year,size,est),as.numeric)) |> 
+                dplyr::mutate(xm=paste(maturity,sex)) |> 
+                dplyr::group_by(case,xm,sex,maturity,year) |> 
+                dplyr::ungroup();
+    new_m<- filter(dfrMbyXM,size==27.5)
+     
+  colnames(new_m)[c(1,2,4,6)]<-c("Year","Sex","Model","M")
+  
+  plot_dat<-new_m[,c(4,1,2,6,3)]
+   plot_dat$maturity[plot_dat$maturity=='immature']<-"Immature"  
+   plot_dat$maturity[plot_dat$maturity=='mature']<-"Mature"    
+      ggplot(plot_dat, aes(x = Year, y = M, colour = Model))+
+      geom_line(lwd=1.15,alpha=.8)+
+      geom_point(size=2)+
+     facet_wrap(~Sex+maturity)+
+     theme_bw()+theme(legend.position=c(.8,.8))+
+      xlim(2015,2022)+expand_limits(y=0)+
+        ylim(0,5)
+  
+
+    
+    
+
+```
+ 
+\newpage
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,fig.height=8,fig.width=8,fig.cap="\\label{predmmb}Model predicted mature male biomass at mating time in 1,000 tonnes. Dashed horizontal lines are half of the respective BMSY proxies based on B35% of a given management currency (i.e. MSST)."}
+#=========================================================
+#  Plot derived quantities
+#=========================================================
+
+dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
+          dplyr::select(case,year,SSB)
+#==add reference points back in
+ggplot(dfr)+
+  geom_line(aes(x=as.numeric(year),y=as.numeric(SSB),col=case))+
+  theme_bw()+
+  expand_limits(y=0)
+
+
+
+```
+
+
+
+
