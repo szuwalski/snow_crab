@@ -67,7 +67,7 @@ strCases = stringr::str_replace_all(strCases,stringr::fixed("_"),".")
 ABC_buffer  <-0.8
 chosen_ind<-1
 OFL_fleet_ind<-0
-fldrs = c("25_gmacs/","25_gmacs_v2/")
+fldrs = c("25_gmacs/","25_gmacs_update/")
 
 do_size_comps<-0 # turn this off when iterating on documents because it takes a long time
 case_for_resids<-"25.1 gmacs" # change this to the model you want to print size comp residuals for
@@ -1135,27 +1135,12 @@ dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |>
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{predfmort}Estimated fishing mortalities for the directed and non-directed fisheries."}
 
-    dfrFMbyXFY = wtsGMACS::extractRep1Results(reslst,"Fully-selected_FM_by_season_sex_and_fishery") |> 
-              tidyr::pivot_longer(cols=!c("case","sex","fleet","year"),
-                                  names_to="season",
-                                  values_to="est") |> 
-              dplyr::mutate(
-                dplyr::across(c(year,est),as.numeric)
-              ) |> 
-              dplyr::group_by(case,fleet,season) |> 
-              dplyr::filter(sum(est)>0) |> 
-              dplyr::ungroup();
- crbFshs = c("Pot_Fishery","Trawl_Bycatch")
-    
- colnames(dfrFMbyXFY)[c(4,6)]<-c("model","F")
-  dfrFMbyXFY$sex[dfrFMbyXFY$sex=="male"]<-"Male"
-  dfrFMbyXFY$sex[dfrFMbyXFY$sex=="female"]<-"Female"
- 
- plot_dat<-dfrFMbyXFY[,c(4,3,2,1,5,6)]
- levels(plot_dat$fleet)[2]<-"Non-directed bycatch"
- ggplot(data = plot_dat) + 
-   geom_line(aes(x=year, y=F,col=model,group=model),lwd=1.25,alpha=.6)+ 
-   facet_grid(fleet ~ season + sex,scale='free_y') + 
+ tmp<-data.frame(wtsGMACS::extractRep1Results(reslst,"Fully-selected_FM_by_season_sex_and_fishery"))
+ colnames(tmp)<-c("Sex","Fleet","Year","s1","s2","s3","Model")
+ levels(tmp$Fleet)[2]<-"Non-directed bycatch"
+ ggplot(data = filter(tmp,Fleet%in%c("Pot_Fishery","Non-directed bycatch"))) + 
+   geom_line(aes(x=as.numeric(Year), y=as.numeric(s2),col=Model,group=Model),lwd=1.25,alpha=.6)+ 
+   facet_grid(Fleet ~ Sex,scale='free_y') + 
    theme_bw()+
    theme(legend.position=c(.2,.8))
 
