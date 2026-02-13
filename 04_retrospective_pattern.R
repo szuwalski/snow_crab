@@ -8,7 +8,7 @@ library(dplyr)
 library(reshape2)
 library(ggplot2)
 orig_wd<-getwd()
-orig_drv<-c("C:/Users/cody.szuwalski/Work/snow_2025_9/25_gmacs/")
+orig_drv<-c("25_gmacs/")
 tot_it<-10
 
 for(z in 1:length(orig_drv))

@@ -10,7 +10,7 @@ use_cores<-detectCores()-2
 cl <- parallel::makeCluster(use_cores)
 doParallel::registerDoParallel(cl)
 
-orig_drv<-c("C:/Users/cody.szuwalski/Work/snow_2025_9/25_gmacs_func/")
+orig_drv<-c("25_gmacs")
 
 tot_it<-100
 orig_wd<-getwd()

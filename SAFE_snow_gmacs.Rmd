@@ -31,7 +31,7 @@ library(maps)
 library(lattice)
 library(PBSmapping)
 library(mapdata)    #some additional hires data
-library(maptools)   #useful tools such as reading shapefiles
+# library(maptools)  # not available
 library(mapproj)
 library(plotrix)
 library(ggridges)
@@ -69,7 +69,7 @@ chosen_ind<-1
 OFL_fleet_ind<-0
 fldrs = c("25_gmacs/","25_gmacs_v2/")
 
-do_size_comps<-0 # turn this off when iterating on documents because it takes a long time
+do_size_comps<-1 # turn this off when iterating on documents because it takes a long time
 case_for_resids<-"25.1 gmacs" # change this to the model you want to print size comp residuals for
 case_for_data_table<-"25.1 gmacs"
 if(do_size_comps==1)
@@ -555,7 +555,7 @@ rownames(tot_likes)[1:5]<-c("Catch","Index","Size","SRR","Tag")
 
 #==get catch 
 
-estpars<-dcast(reslst$dfrPars[,c(2,3,6,7)],param~case, fun.aggregate = mean)
+estpars<-dcast(reslst$dfrPars[,c(1,2,3,6,7)],param~case, fun.aggregate = mean)
 estpars[,2:3]<-round(estpars[,2:3],2)
 
 #==table catch
