@@ -14,12 +14,12 @@ require(wtsGMACS)
 dirPrj = rstudioapi::getActiveProject()
 
 ##--identify relative (from project folder) path and name for each model
-fldrs = c( "25_gmacs/","25_gmacs_update/","25_gmacs_update_hyb_surv")
+fldrs = c( "25_gmacs/","25_gmacs_update/","25_gmacs_update_hyb_surv","25_gmacs_update_newmat")
 cases = names(fldrs)#--model names
 
 #--create full paths, reassign model names
 fldrs=file.path(dirPrj,fldrs) 
-names(fldrs) = c("25.1 gmacs","25.1 gmacs (update)","25.1 gmacs (up + hyb_surv)")
+names(fldrs) = c("25.1 gmacs","25.1 gmacs (update)","25.1 gmacs (up + hyb_surv)","25.1 gmacs (up + mature)")
 
 #--read model results (returns a `gmacs_reslst` object)
 resLst = wtsGMACS::readModelResults(fldrs)

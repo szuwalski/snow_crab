@@ -67,8 +67,8 @@ strCases = stringr::str_replace_all(strCases,stringr::fixed("_"),".")
 ABC_buffer  <-0.8
 chosen_ind<-1
 OFL_fleet_ind<-0
-fldrs = c("25_gmacs/","25_gmacs_update/","25_gmacs_update_hyb_surv/")
-
+fldrs = c("25_gmacs/","25_gmacs_update/","25_gmacs_update_hyb_surv/","25_gmacs_update_newmat/")
+#==get the names here some how to refer to in the document
 do_size_comps<-0 # turn this off when iterating on documents because it takes a long time
 case_for_resids<-"25.1 gmacs" # change this to the model you want to print size comp residuals for
 case_for_data_table<-"25.1 gmacs"
@@ -503,7 +503,7 @@ for(y in 1:length(fldrs))
       }
 }
 
-colnames(tot_likes) = c("25.1 gmacs","25.1 gmacs (update)","25.1 gmace (up + hyb_surv)")
+colnames(tot_likes) = c("25.1 gmacs","25.1 gmacs (update)","25.1 gmace (up + hyb_surv)","25.1 gmace (up + mature)")
 rownames(tot_likes)[1:5]<-c("Catch","Index","Size","SRR","Tag")
  kable(round(tot_likes[-8,],2),split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{like_comp_tot}Likelihood components by category and model.")
 
@@ -836,7 +836,7 @@ colnames(dfrIndxFit)[c(13,14,15)]<-c('predicted','residuals','model')
 
 ##--go back to this when data consistent across models?----
   p = ggplot(dfrIndxFit,aes(x=year,colour=model)) +
-        geom_point(aes(y=obs),col='black',position = position_dodge(width = 1)) +
+        geom_point(aes(y=obs),position = position_dodge(width = 1)) +
         geom_line(aes(y=predicted),lwd=1.1) +
         geom_errorbar(aes(x=year,ymin = lba, ymax = uba), width = 0.2,col='black') +
         scale_y_continuous(limits=c(0,NA)) +
@@ -1150,7 +1150,10 @@ dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |>
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{predmat}Estimated (black line) or specified (colored lines) probability(s) of maturing for male crab."}
 
  tmp2<-paste("reslst$outsLst$'",case_for_data_table,"'$mature_probability",sep='')
+ tmp3<-paste("reslst$outsLst$'","25.1 gmacs (up + mature)","'$mature_probability",sep='')
  tmp<-eval(parse(text=tmp2))
+ tm<-eval(parse(text=tmp3))
+ 
    plotdat<-melt(tmp,id.vars=c("Sex","Year"))
    colnames(plotdat)[3:4]<-c("width","prob")
    plotdat[,3]<-as.numeric(as.character(plotdat[,3]))
@@ -1160,10 +1163,23 @@ dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |>
         labs(x = "Carapace width (mm)", y ="Probability of terminal molt")+ 
      geom_line(data=plotdat, aes(x = width, y = prob,col = Year,group=Year),lwd=1.15,alpha=.8)+
      guides(linetype='none')+
+     theme_bw()+theme(legend.position='none')+
+     facet_wrap(~Sex)
+
+   
+   plotdat<-melt(tm,id.vars=c("Sex","Year"))
+   colnames(plotdat)[3:4]<-c("width","prob")
+   plotdat[,3]<-as.numeric(as.character(plotdat[,3]))
+   plotdat[,4]<-as.numeric(plotdat[,4])
+   q <- ggplot() +
+        expand_limits(y = c(0, 1)) +
+        labs(x = "Carapace width (mm)", y ="Probability of terminal molt")+ 
+     geom_line(data=plotdat, aes(x = width, y = prob,col = Year,group=Year),lwd=1.15,alpha=.8)+
+     guides(linetype='none')+
      theme_bw()+theme(legend.position='bottom')+
      facet_wrap(~Sex)
-    print(p)
-    
+
+    p/q
     
 
 ```
