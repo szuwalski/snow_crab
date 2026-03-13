@@ -1,5 +1,5 @@
 #==script for jittering
-library(gmr)
+#library(gmr)
 library(doParallel)
 library(parallel)
 library(foreach)
@@ -10,7 +10,7 @@ use_cores<-detectCores()-2
 cl <- parallel::makeCluster(use_cores)
 doParallel::registerDoParallel(cl)
 
-orig_drv<-c("C:/Users/cody.szuwalski/Work/snow_2025_9/25_gmacs_func/")
+orig_drv<-c("C:/Users/cody.szuwalski/Work/snow_crab/25_gmacs_update_imm/")
 
 tot_it<-100
 orig_wd<-getwd()
@@ -39,7 +39,7 @@ for(z in 1:length(orig_drv))
               work_drv)
     
     in_proj<-readLines(paste(orig_drv[z],"/gmacs.dat",sep=""))
-    in_proj[grep("Jitter",in_proj)+1]<-"1 0.1"
+    in_proj[grep("Jitter",in_proj)+1]<-"1 0 0.1"
 
     #==rerun assessment
     setwd(paste(work_drv))
@@ -89,8 +89,9 @@ colnames(keep_out)<-c("BMSY","Status","tot_ofl","FMSY","FOFL","OFL","disc_OFL","
 png('plots/jittered_ofl_95.png',height=6,width=6,res=350,units='in')
 ggplot()+
   geom_point(data=as.data.frame(keep_out),aes(x=negloglike,y=OFL))+
-  theme_bw()+xlim(-19175,-19160)+ylim(0,4)+
-  ylab("OFL (1,000 t)")
+  theme_bw()+
+  ylab("OFL (1,000 t)")+
+    xlim(-19250,-18800)
 dev.off()
 
 
@@ -100,7 +101,7 @@ dev.off()
 hold_pars<-matrix(ncol=262,nrow=tot_it)
 for(z in 1:tot_it)
 {
-tmp<-readLines(paste(orig_drv[3],"/jitter/",z,"/gmacs.par",sep=""))
+tmp<-readLines(paste(orig_drv,"/jitter/",z,"/gmacs.par",sep=""))
 hold_pars[z,]<-tmp[-grep('#',tmp)]  
 } 
 colnames(hold_pars)<-tmp[grep('#',tmp)[-1]] 
