@@ -39,8 +39,8 @@ tot_cat_snow <- tot_cat %>%
                 total_catch_wt_s = total_catch_wt)
 
 tot_cat <- merge(tot_cat_hybrid, tot_cat_snow, all = TRUE) %>%
-  dplyr::mutate(total_catch_wt_s = ifelse(is.na(total_catch_wt_s), 0, total_catch_wt_s),
-                total_catch_wt_h = ifelse(is.na(total_catch_wt_h), 0, total_catch_wt_h),
+  dplyr::mutate(total_catch_wt_s = coalesce(total_catch_wt_s, 0),
+                total_catch_wt_h = coalesce(total_catch_wt_h, 0),
                 total_catch_wt = total_catch_wt_s + total_catch_wt_h
   )
 
@@ -98,8 +98,8 @@ ret_cat_sc <- ret_cat_sc %>%
   full_join(ret_cat_hy %>%
               dplyr::rename(total_h = total)
   ) %>%
-  mutate(total_h = ifelse(is.na(total_h), 0, total_h),
-         total = ifelse(is.na(total), 0, total),
+  mutate(total_h = coalesce(total_h, 0),
+         total = coalesce(total, 0),
          total = total + total_h)
 
 
@@ -107,8 +107,8 @@ tot_cat_sc <- tot_cat_sc %>%
   full_join(tot_cat_hy %>%
               dplyr::rename(total_h = total)
   ) %>%
-  mutate(total_h = ifelse(is.na(total_h), 0, total_h),
-         total = ifelse(is.na(total), 0, total),
+  mutate(total_h = coalesce(total_h, 0),
+         total = coalesce(total, 0),
          total = total + total_h)
 
 # Define uniform midpoints and bin edges for size compositions
