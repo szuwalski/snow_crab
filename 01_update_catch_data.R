@@ -60,6 +60,7 @@ midpoints <- seq(27.5, 132.5, by = 5)
 # Calculate bin edges from midpoints
 bin_width <- 5
 bin_edges <- c(midpoints - bin_width / 2, last(midpoints) + bin_width / 2)
+bin_edges[length(bin_edges)] <- 999 # Set right end to arbitrary max
 
 # Create bins
 data <- data %>%

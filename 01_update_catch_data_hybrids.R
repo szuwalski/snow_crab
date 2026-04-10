@@ -115,6 +115,7 @@ tot_cat_sc <- tot_cat_sc %>%
 midpoints <- seq(27.5, 132.5, by = 5)
 bin_width <- 5
 bin_edges <- c(midpoints - bin_width / 2, last(midpoints) + bin_width / 2)
+bin_edges[length(bin_edges)] <- 999 # Set right end to arbitrary max
 
 # Helper function to bin and normalize size comp data
 process_size_comps <- function(df, size_breaks, size_labels, right_closed = FALSE) {
