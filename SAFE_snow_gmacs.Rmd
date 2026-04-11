@@ -8,6 +8,8 @@ output:
     fig_width: 6
 header-includes:   
 -  \usepackage{pdfpages}
+- \usepackage{geometry}
+- \geometry{margin=1in}
 number_sections: yes
 csl: fish-and-fisheries.csl
 toc: yes
@@ -15,138 +17,143 @@ title: "Preliminary 2026 assessment for eastern Bering Sea snow crab"
 ---
 
 ```{r, include=FALSE}
-
-rm(list=ls())
 #tinytex::reinstall_tinytex(repository = "illinois")
-knitr::opts_chunk$set(echo=FALSE,message=FALSE,warning=FALSE)
+# Global knitr options
+knitr::opts_chunk$set(
+  echo = FALSE, 
+  message = FALSE, 
+  warning = FALSE, 
+  fig.pos = "H", 
+  out.width = "100%"
+)
 
-library(plyr)
-library(dplyr)
-library(knitr)
-library(ggplot2)
-library(PBSmodelling)
-library(pander)
-library(coda)
-library(maps)
-library(lattice)
-library(PBSmapping)
-library(mapdata)    #some additional hires data
-# library(maptools)  # not available
-library(mapproj)
-library(plotrix)
-library(ggridges)
-library(reshape2)
-library(miceadds)
-library(devtools)
-library(patchwork)
+# Load libraries - loading dplyr AFTER plyr to prevent function masking
+pacman::p_load(plyr, dplyr, knitr, ggplot2, pander, reshape2, patchwork)
+pacman::p_load(wtsGMACS, wtsUtilities) # https://github.com/wStockhausen?tab=repositories
 
+
+# Buck's packages have to be installed in this order
+# devtools::install_github("wStockhausen/wtsQMD")
+# devtools::install_github("wStockhausen/wtsUtilities")
+# devtools::install_github("wStockhausen/wtsPlots")
+# devtools::install_github("wStockhausen/tcsamFunctions")
+# devtools::install_github("wStockhausen/rTCSAM02")
+# devtools::install_github("wStockhausen/wtsMarkdown")
+# devtools::install_github("wStockhausen/rCompTCMs")
+# devtools::install_github("wStockhausen/wtsGMACS")
+
+# Mapping and Analysis
+pacman::p_load(PBSmodelling, PBSmapping, maps, mapproj, ggridges)
+
+# Additional utilities
+pacman::p_load(coda, plotrix, miceadds)
+
+# Pander options for cleaner tables
+panderOptions('table.alignment.default', 'left')
+panderOptions('table.split.table', Inf)
 
 ```
 
 \newpage
 
 
-```{r GMACS-getModelResults}
-require(wtsGMACS);
-reslst = wtsUtilities::getObj("rda_ModelsResLst.RData");
-cases = names(reslst$repsLst);
-nCases = length(cases);
-strMdls = "models";
-strCases = cases[1]; i=2;
-while (i < nCases) {strCases = paste0(strCases,", ",cases[i]); i=i+1;}
-if (nCases != 1) strCases = paste0(strCases," and ",cases[nCases]);
-if (nCases == 1) strMdls = "model";
-strCases = stringr::str_replace_all(strCases,stringr::fixed("_"),".")
+```{r GMACS-getModelResults, include=FALSE}
+# Load model results
+# Ensure rda_ModelsResLst.RData is in the working directory
+# it contains all the results from '05_buck_read_results.R"
+reslst <- wtsUtilities::getObj("rda_ModelsResLst.RData")
+
+# Extract case names
+cases <- names(reslst$repsLst)
+nCases <- length(cases)
+
+# Create a clean string for referencing models in the text
+# Converts "25_1_gmacs" to "25.1.gmacs"
+clean_cases <- gsub("_", ".", cases)
+strMdls <- ifelse(nCases == 1, "model", "models")
+
+# Build the descriptive string (e.g., "model A, model B, and model C")
+if (nCases > 1) {
+  strCases <- paste(paste(clean_cases[-nCases], collapse = ", "), 
+                    "and", clean_cases[nCases])
+} else {
+  strCases <- clean_cases
+}
 
 ```
 
 \newpage
 
 ```{r,echo=F,message=FALSE,warning=F,include=FALSE}
+# --- Report Configuration ---
+ABC_buffer     <- 0.8
+chosen_ind     <- 1
+OFL_fleet_ind  <- 0
+fldrs          <- c("25_gmacs/", "25_gmacs_update/", 
+                    "25_gmacs_update_hyb_surv/", "25_gmacs_update_hyb_fishery/", "25_gmacs_update_hyb_surv_and_fsh/", 
+                    "25_gmacs_update_newmat/",
+                    "25_gmacs_update_hyb_surv_and_fsh_newmat/")
 
-ABC_buffer  <-0.8
-chosen_ind<-1
-OFL_fleet_ind<-0
-fldrs = c("25_gmacs/","25_gmacs_update/","25_gmacs_update_hyb_surv/","25_gmacs_update_newmat/")
-#==get the names here some how to refer to in the document
-do_size_comps<-0 # turn this off when iterating on documents because it takes a long time
-case_for_resids<-"25.1 gmacs" # change this to the model you want to print size comp residuals for
-case_for_data_table<-"25.1 gmacs"
+# Case selection
+case_for_resids     <- "25.1 gmacs" # model print size comp residuals for
+case_for_data_table <- "25.1 gmacs"
+
+# Global Switches
+do_size_comps  <- 1 # Set to 1 to regenerate PNGs (can take time)
+do_proj        <- 0 # Set to 1 to process projection files
+make_proj_fig  <- 0 # Set to 1 to generate projection plots
+
 if(do_size_comps==1)
 {
-  ##--size comps from Buck----
-  dfrZCs = wtsGMACS::extractRep1Results(reslst,"Size_fit_summary") |> 
-             dplyr::mutate(
-               dplyr::across(c(year,size,inpSS,inpN,aggObs,aggPrd,aggRes),
-                             as.numeric)
-             );
-  flts = (dfrZCs |> dplyr::distinct(fleet))$fleet;
-  dfrUFCs = dfrZCs |> dplyr::distinct(origID,aggID,fleet,comp_type,sex,maturity,shell_cond,case) |> 
-             dplyr::mutate(fleet=factor(fleet,levels=flts))
-  dfrUFCs = dfrUFCs |> 
-             dplyr::inner_join(dfrUFCs |> 
-                               dplyr::group_by(aggID,case) |> 
-                               dplyr::summarize(ext=dplyr::n()) |> 
-                               dplyr::ungroup(),by=c("aggID","case"));
-  dfrUZCs = dfrUFCs |> 
-             dplyr::distinct(comp_type,fleet,ext,sex,maturity,shell_cond) |>
-             dplyr::arrange(comp_type,fleet,dplyr::desc(ext),dplyr::desc(sex),maturity,shell_cond);
-  pltZCs<-function(dfrZCs,dfrUFCs,dfrUZC){
-    dfrUFC = dfrUFCs |> dplyr::inner_join(dfrUZC,by=names(dfrUZC));#--pick unique fleet, bio cats, & cases
-    tmp = dfrZCs |> dplyr::inner_join(dfrUFC,by=names(dfrUFC)[names(dfrUFC)!="ext"]);
-    str = paste(dfrUZC$fleet,dfrUZC$comp_type);
-    if (dfrUZC$shell_cond!="undetermined") str = paste(str,dfrUZC$shell_cond);
-    if (dfrUZC$maturity  !="undetermined") str = paste(str,dfrUZC$maturity);
-    if (dfrUZC$sex       !="undetermined") str = paste0(str," ",dfrUZC$sex,"s");
-    p = compareFitsZCs(tmp,subtitle=str);
-    return(p);
-  }
-
-   for (i in 1:length(unique(dfrZCs$origID)))
-    {
-     tmp<-filter(dfrZCs,origID==as.character(i))
-     names(tmp)
-     
-   p<- ggplot()+
-      geom_bar(data=tmp,
-               aes(x=as.numeric(as.character(size)),y=aggObs),
-               stat = "identity", position = "identity",col='lightgrey',fill='lightgrey')+
-      geom_line(data=tmp,aes(x=as.numeric(as.character(size)),y=aggPrd,col=case))+
-      facet_wrap(~year)+theme_bw()+xlab("Carapace width (mm)")+ylab("Proportion")+
-     ggtitle(paste(tmp$fleet[1],"/",tmp$sex[1],"/",tmp$comp_type[1],"/",tmp$maturity[1]))
+  # Extract results using Buck's package tools
+  dfrZCs <- wtsGMACS::extractRep1Results(reslst, "Size_fit_summary") |> 
+    dplyr::mutate(across(c(year, size, inpSS, inpN, aggObs, aggPrd, aggRes), as.numeric))
+  
+  # Plotting Logic
+  unique_comps <- dfrZCs |> distinct(origID, aggID, fleet, comp_type, sex, maturity, shell_cond, case) # Grant: case, may not be needed...
+  
+  for (i in seq_along(unique(unique_comps$origID))) {
+    curr_id <- as.numeric(unique_comps$origID[i])
+    tmp     <- dfrZCs |> filter(origID == curr_id)
     
+    # Size Composition Plot
+    p <- ggplot(tmp) +
+      geom_bar(aes(x = as.numeric(size), y = aggObs), stat = "identity", position = "identity", fill = 'lightgrey') +
+      geom_line(aes(x = as.numeric(size), y = aggPrd, col = case)) +
+      facet_wrap(~year) +
+      theme_bw() +
+      labs(x = "Carapace width (mm)", y = "Proportion", 
+           title = paste(tmp$fleet[1], tmp$sex[1], tmp$comp_type[1], tmp$maturity[1], sep = " / "))
 
-    png(paste("plots/size_comp_",i,".png",sep=""),height=8,width=8,res=300,units='in')
-    print(p)
-    dev.off()
+    ggsave(paste0("plots/size_comp_", curr_id, ".png"), p, height = 8, width = 8, dpi = 300)
+    
+    # Residual Plot for specific case
+    res_data <- tmp |> 
+      filter(case == case_for_resids) |> 
+      mutate(raw_res = aggObs - aggPrd)
+    
+    p_res <- ggplot(res_data) +
+      geom_point(aes(x = year, y = size, size = abs(raw_res), col = as.factor(sign(raw_res))), alpha = 0.9) +
+      theme_bw() +
+      labs(x = "Year", y = "Carapace width (mm)", col = "Residual direction", size = "Raw residual size")
 
-#==
-  use<-filter(tmp,case==case_for_resids)
-  use$raw_res<-use$aggObs-use$aggPrd
-   out_plot<-ggplot(use)+
-    geom_point(aes(y=size,x=year,size=abs(raw_res),col=as.factor(sign(raw_res))),alpha=.9)+
-    theme_bw()+xlab("Year")+ylab("Carapace width (mm)")+
-    labs(col="Residual direction",size="Raw residual size")
-
-  png(paste("plots/size_comp_resid_",i,".png",sep=""),height=10,width=8,res=300,units='in')
-  print(out_plot)
-  dev.off()
-   }
+    ggsave(paste0("plots/size_comp_resid_", curr_id, ".png"), p_res, height = 10, width = 8, dpi = 300)
+  }
 }
 
 
 
- #=================================
- # this code pulls the projections for selected models
- # to do the projections, follow these steps:
- # this requires a converged model with a hessian
- # make a new folder with the model to project in it, specify projection details in .PROJ file
- # .PROJ file needs to change strategies
- # save .par file as .pin file
- # run '.\gmacs.exe -phase 6 -nohess -mcmc 1 -mcsave 1'
- # that executes one draw (at the MLE) of MCMC and saves the results
- # run '.\gmacs.exe -mceval -noest' in that folder to write output to 'mcoutPROJ.REP'
- # run code below to pull relevant info, be sure to modify years to make 'mcoutPROJ.REP'
+#=================================
+# this code pulls the projections for selected models
+# to do the projections, follow these steps:
+# this requires a converged model with a hessian
+# make a new folder with the model to project in it, specify projection details in .PROJ file
+# .PROJ file needs to change strategies
+# save .par file as .pin file
+# run '.\gmacs.exe -phase 6 -nohess -mcmc 1 -mcsave 1'
+# that executes one draw (at the MLE) of MCMC and saves the results
+# run '.\gmacs.exe -mceval -noest' in that folder to write output to 'mcoutPROJ.REP'
+# run code below to pull relevant info, be sure to modify years to make 'mcoutPROJ.REP'
 
 # BE SURE TO CHANGE THE F IN THE PROJ FILE TO THE FOFL
 proj_dir<-paste0(dirname(getwd()), "/snow_crab/25_gmacs/")
@@ -155,48 +162,48 @@ do_proj<-0
 
 if(do_proj==1)
 {
- proj_dirs<-c(paste(proj_dir,"proj/mcoutPROJSSB.REP",sep=''))
-
- proj_mmb_under_ofl<-rep(NA,length(proj_dirs))
- proj_stat_ofl<-rep(NA,length(proj_dirs))
- proj_mmb_under_nof<-rep(NA,length(proj_dirs))
- proj_stat_nof<-rep(NA,length(proj_dirs))
-
- for(x in 1:length(proj_dirs))
- {
-  innames<-c("Draw","Replicate","Treatment",paste("F",seq(1,4)),
-             "B35",seq(1982,2035))
-  projfile<-as.data.frame(matrix(scan(proj_dirs[x],skip=1),ncol=length(innames),byrow=TRUE))
-  colnames(projfile)<-innames
-
-  proj_mmb_under_ofl[x]<-filter(projfile,Treatment==2)$'2025'[1]
-  proj_stat_ofl[x]<-proj_mmb_under_ofl[x]/filter(projfile,Treatment==2)$'B35'[1]
-
-  proj_mmb_under_nof[x]<-filter(projfile,Treatment==1)$'2025'[1]
-  proj_stat_nof[x]<- proj_mmb_under_nof[x]/filter(projfile,Treatment==2)$'B35'[1]
+  proj_dirs<-c(paste(proj_dir,"proj/mcoutPROJSSB.REP",sep=''))
+  
+  proj_mmb_under_ofl<-rep(NA,length(proj_dirs))
+  proj_stat_ofl<-rep(NA,length(proj_dirs))
+  proj_mmb_under_nof<-rep(NA,length(proj_dirs))
+  proj_stat_nof<-rep(NA,length(proj_dirs))
+  
+  for(x in 1:length(proj_dirs))
+  {
+    innames<-c("Draw","Replicate","Treatment",paste("F",seq(1,4)),
+               "B35",seq(1982,2035))
+    projfile<-as.data.frame(matrix(scan(proj_dirs[x],skip=1),ncol=length(innames),byrow=TRUE))
+    colnames(projfile)<-innames
+    
+    proj_mmb_under_ofl[x]<-filter(projfile,Treatment==2)$'2025'[1]
+    proj_stat_ofl[x]<-proj_mmb_under_ofl[x]/filter(projfile,Treatment==2)$'B35'[1]
+    
+    proj_mmb_under_nof[x]<-filter(projfile,Treatment==1)$'2025'[1]
+    proj_stat_nof[x]<- proj_mmb_under_nof[x]/filter(projfile,Treatment==2)$'B35'[1]
+  }
 }
-}
 
-make_proj_fig<-0
+
 if(make_proj_fig==1)
 {
-#==make a figure that shows projections under given assumptions about rec and M and F
-yams<-melt(projfile[,c(1,2,3,4,9:ncol(projfile))],id.vars=c("Draw","Replicate","Treatment","F 1"))
-yams$Treatment<-c("No fishing","OFL")[yams$Treatment]
-meds<-yams%>%
-  group_by(Treatment,variable)%>%
-  summarize(med_ssb=median(value))
-
-#==compare to survey biomass
-#fldrs = c("25_gmacs_func/")
- tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
- male_wt_len<-as.numeric(filter(reslst$repsLst$'25.3 gmacs'$IndivWeightByXM,Sex=="male"&Year=="1982"&Maturity=='mature')[,4:25])
-
+  #==make a figure that shows projections under given assumptions about rec and M and F
+  yams<-melt(projfile[,c(1,2,3,4,9:ncol(projfile))],id.vars=c("Draw","Replicate","Treatment","F 1"))
+  yams$Treatment<-c("No fishing","OFL")[yams$Treatment]
+  meds<-yams%>%
+    group_by(Treatment,variable)%>%
+    summarize(med_ssb=median(value))
+  
+  #==compare to survey biomass
+  #fldrs = c("25_gmacs_func/")
+  tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
+  male_wt_len<-as.numeric(filter(reslst$repsLst$'25.3 gmacs'$IndivWeightByXM,Sex=="male"&Year=="1982"&Maturity=='mature')[,4:25])
+  
   #==mature males
   st<-grep(c("N(males): dataframe"),tmp,fixed=TRUE)
   tmp2<-tmp[st:(st+50)]
   tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
-      
+  
   N_males<-NULL
   for(x in 1:length(tmp3))
     N_males<-rbind(N_males,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
@@ -209,16 +216,16 @@ meds<-yams%>%
   mat_95[sizes<95&sizes>90]<-0.5
   sweep2<-apply(sweep(sweep1,2,mat_95,FUN='*'),1,sum)/1000000
   surv_lg_male<-data.frame(Year=N_males[,1],MMB=sweep2)
-
+  
   png(paste("plots/projections.png",sep=""),height=8,width=8,res=300,units='in')
- ggplot()+
-  geom_line(data=yams,aes(x=as.numeric(as.character(variable)),y=value,col=as.factor(Treatment),group=interaction(Replicate,Treatment)),alpha=.3)+
-  geom_line(data=meds,aes(x=as.numeric(as.character(variable)),y=med_ssb,col=as.factor(Treatment)),lwd=2)+
+  ggplot()+
+    geom_line(data=yams,aes(x=as.numeric(as.character(variable)),y=value,col=as.factor(Treatment),group=interaction(Replicate,Treatment)),alpha=.3)+
+    geom_line(data=meds,aes(x=as.numeric(as.character(variable)),y=med_ssb,col=as.factor(Treatment)),lwd=2)+
     geom_line(data=filter(meds,as.numeric(as.character(variable))<2026),aes(x=as.numeric(as.character(variable)),y=med_ssb,col=as.factor(Treatment)),lwd=2,col='grey')+
-  theme_bw()+ylab("MMB (>=95mm)")+
-  xlab("Year")+labs(color="Fishing")+ylim(0,900)+
-  geom_line(data=surv_lg_male,aes(x=Year,y=MMB))
-dev.off()
+    theme_bw()+ylab("MMB (>=95mm)")+
+    xlab("Year")+labs(color="Fishing")+ylim(0,900)+
+    geom_line(data=surv_lg_male,aes(x=Year,y=MMB))
+  dev.off()
 }
 
 ```
@@ -254,22 +261,22 @@ INSERT ALL COMMENTS AND HOW THIS DOC ADDRESSES THEM (OR DOESN'T)
 
 The key assumptions of these models include: 
 
- * the probability of terminally molting at size varies over time and size and is specified based on observations from the survey data
- 
- * survey selectivity is estimated by era (1982-88; 1989-present) and sex as a non-parametric curve subject to priors based on the BSFRF survey efficiency experiment data
- 
- * growth is a linear function of pre-molt carapace width with a specified variability around post-molt size
- 
- * all immature crab molt
- 
- * natural mortality is estimated by sex and maturity state with additional mortality events estimated in 2018 and 2019 and subject to a prior based on an assumed longevity of 20 years
- 
- * total and retained fishery selectivity are estimated logistic curves
- 
- * all non-directed bycatch (e.g. snow crab caught in the Tanner crab fishery or crab caught in the non-pelagic trawl fisheries) is lumped into a single 'fishery' for which a single selectivity is estimated
- 
- * recruitment is estimated separately for females and males and is allocated in the first 3 size bins
- 
+* the probability of terminally molting at size varies over time and size and is specified based on observations from the survey data
+
+* survey selectivity is estimated by era (1982-88; 1989-present) and sex as a non-parametric curve subject to priors based on the BSFRF survey efficiency experiment data
+
+* growth is a linear function of pre-molt carapace width with a specified variability around post-molt size
+
+* all immature crab molt
+
+* natural mortality is estimated by sex and maturity state with additional mortality events estimated in 2018 and 2019 and subject to a prior based on an assumed longevity of 20 years
+
+* total and retained fishery selectivity are estimated logistic curves
+
+* all non-directed bycatch (e.g. snow crab caught in the Tanner crab fishery or crab caught in the non-pelagic trawl fisheries) is lumped into a single 'fishery' for which a single selectivity is estimated
+
+* recruitment is estimated separately for females and males and is allocated in the first 3 size bins
+
 
 # F. Analytic approach
 
@@ -326,11 +333,11 @@ Historically, the tier 3 OFL was calculated using proxies for biomass and fishin
 Calculated values of F~35%~ and B~35%~ were used in conjunction with a Tier 3 control rule to adjust the proportion of F~35%~ that is applied to the stock based on the status of the population relative to B~35%~ (Amendment 24, NMFS). To determine the F~OFL~, the population is projected to the time of fishing for the upcoming fishery under no fishing. If the MMB at that time exceeds 25% of B~35%~, a fishery can occur and the F~OFL~ is calculated as:
 
 \begin{equation}
- F_{OFL} =
- \begin{cases}
- Bycatch  & if \frac{MMB}{B_{35}} \leq 0.25 \\[3ex]
- \frac {F_{35} ( \frac {MMB}{B_{35}} - \alpha)}{1-\alpha}  & if 0.25 < \frac {MMB}{B_{35}} < 1 \\[3ex]
- F_{35} & if MMB > B_{35}
+F_{OFL} =
+\begin{cases}
+Bycatch  & if \frac{MMB}{B_{35}} \leq 0.25 \\[3ex]
+\frac {F_{35} ( \frac {MMB}{B_{35}} - \alpha)}{1-\alpha}  & if 0.25 < \frac {MMB}{B_{35}} < 1 \\[3ex]
+F_{35} & if MMB > B_{35}
 \end{cases}
 \end{equation}
 
@@ -350,8 +357,8 @@ The recommended acceptable biological catch (ABC) was calculated by subtracting 
 
 The buffers for the last five years used by the SSC were: 65% (2024), 50% (2023), (October 2022 SSC reports are not available online), 25% (2021), and 25% (2020).
 
- \newpage
- 
+\newpage
+
 ## Author recommendations
 
 
@@ -484,28 +491,28 @@ Zheng, J., G.H. Kruse, and D.R. Ackley.  2001. Spatial distribution and recruitm
 tot_likes<-matrix(nrow=9,ncol=length(fldrs))
 rownames(tot_likes)<-seq(1,9)
 for(y in 1:length(fldrs))
+{
+  tmp<-readLines(paste(fldrs[y],"/Gmacsall.out",sep=''))
+  st<-grep("Likelihoods_by_type",tmp)[1]
+  for(z in 1:9)
+  {
+    if(y==1)
     {
-      tmp<-readLines(paste(fldrs[y],"/Gmacsall.out",sep=''))
-      st<-grep("Likelihoods_by_type",tmp)[1]
-      for(z in 1:9)
-      {
-        if(y==1)
-        {
-        bleh<-unlist(strsplit(tmp[st+z],split=' '))
-        tot_likes[z,y]<-as.numeric(bleh[grep(":",bleh)+1])
-        }
-       if(y>=2)
-       {
-        bleh<-unlist(strsplit(tmp[st+z],split=' '))
-        tot_likes[z,y]<-as.numeric(bleh[2])
-        rownames(tot_likes)[z]<-bleh[1]
-       }
-      }
+      bleh<-unlist(strsplit(tmp[st+z],split=' '))
+      tot_likes[z,y]<-as.numeric(bleh[grep(":",bleh)+1])
+    }
+    if(y>=2)
+    {
+      bleh<-unlist(strsplit(tmp[st+z],split=' '))
+      tot_likes[z,y]<-as.numeric(bleh[2])
+      rownames(tot_likes)[z]<-bleh[1]
+    }
+  }
 }
 
 colnames(tot_likes) = c("25.1 gmacs","25.1 gmacs (update)","25.1 gmace (up + hyb_surv)","25.1 gmace (up + mature)")
 rownames(tot_likes)[1:5]<-c("Catch","Index","Size","SRR","Tag")
- kable(round(tot_likes[-8,],2),split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{like_comp_tot}Likelihood components by category and model.")
+kable(round(tot_likes[-8,],2),split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{like_comp_tot}Likelihood components by category and model.")
 
 
 ```
@@ -606,26 +613,26 @@ take_row<-c(1,2,3,4,8,12,13)
 keep_out<-matrix(nrow=length(fldrs),ncol=length(take_row))
 colnames(keep_out)<-seq(1,ncol(keep_out))
 for(y in 1:length(fldrs))
-    {
-      tmp<-readLines(paste(fldrs[y],"/Gmacsall.out",sep=''))
-      st<-grep("BMSY",tmp)[1]
-      end<-grep("Ofl",tmp)[length(grep("Ofl",tmp))]
-      use<-tmp[st:end]
-for(x in 1:length(take_row))
- {
-  if(x<4)
-   keep_out[y,x]<-as.numeric(strsplit(use[take_row[x]],split=" ")[[1]][3])
+{
+  tmp<-readLines(paste(fldrs[y],"/Gmacsall.out",sep=''))
+  st<-grep("BMSY",tmp)[1]
+  end<-grep("Ofl",tmp)[length(grep("Ofl",tmp))]
+  use<-tmp[st:end]
+  for(x in 1:length(take_row))
+  {
+    if(x<4)
+      keep_out[y,x]<-as.numeric(strsplit(use[take_row[x]],split=" ")[[1]][3])
     if(x>=4)
-   keep_out[y,x]<-as.numeric(strsplit(use[take_row[x]],split=" ")[[1]][4])
-  colnames(keep_out)[x]<-strsplit(use[take_row[x]],split=" ")[[1]][1]
-}
+      keep_out[y,x]<-as.numeric(strsplit(use[take_row[x]],split=" ")[[1]][4])
+    colnames(keep_out)[x]<-strsplit(use[take_row[x]],split=" ")[[1]][1]
+  }
 }
 sq_tk<-PlotTab[,c(3,9,6,4,5)]
 colnames(sq_tk)<-colnames(keep_out[,c(1:5)])
 man_tab<-round(keep_out[,c(1:5)],2)
 rownames(man_tab) = fldrs
 
- kable(man_tab,split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{stepchange}Management quantities derived from maximum likelihood estimates by model using Tier 3 reference points. Reported natural mortality is for mature males, average recruitment is for males, and status and MMB were estimates for February 15 of the completed crab year.")
+kable(man_tab,split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{stepchange}Management quantities derived from maximum likelihood estimates by model using Tier 3 reference points. Reported natural mortality is for mature males, average recruitment is for males, and status and MMB were estimates for February 15 of the completed crab year.")
 
 
 ```
@@ -636,103 +643,103 @@ rownames(man_tab) = fldrs
 
 ```{r,echo=FALSE,warning=FALSE,message=F}
 
- tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
- tmp2<-paste("reslst$repsLst$'",case_for_data_table,"'$IndivWeightByXM",sep='')
- input<-eval(parse(text=tmp2))
+tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
+tmp2<-paste("reslst$repsLst$'",case_for_data_table,"'$IndivWeightByXM",sep='')
+input<-eval(parse(text=tmp2))
 
- male_wt_len<-as.numeric(filter(input,Sex=="male"&Year=="1982"&Maturity=='mature')[,4:25])
- female_wt_len<-as.numeric(filter(input,Sex=="female"&Year=="1982"&Maturity=='mature')[,4:25])
+male_wt_len<-as.numeric(filter(input,Sex=="male"&Year=="1982"&Maturity=='mature')[,4:25])
+female_wt_len<-as.numeric(filter(input,Sex=="female"&Year=="1982"&Maturity=='mature')[,4:25])
 
-  #==mature males
-  st<-grep(c("N(males_mature): dataframe"),tmp,fixed=TRUE)
-  tmp2<-tmp[st:(st+50)]
-  tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
-      
-  N_males_mat<-NULL
-  for(x in 1:length(tmp3))
-    N_males_mat<-rbind(N_males_mat,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
-       
-  #==mature females
-  st<-grep(c("N(females_mature): dataframe"),tmp,fixed=TRUE)
-  tmp2<-tmp[st:(st+50)]
-  tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
-      
-  N_females_mat<-NULL
-  for(x in 1:length(tmp3))
-    N_females_mat<-rbind(N_females_mat,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
-       
-  dfrIndxFit = wtsGMACS::extractRep1Results(reslst,"Index_fit_summary") |> 
-               dplyr::mutate(
-                dplyr::across(c(year,obs,base_CV,actual_CV,q,prd,prsn_res),
-                              as.numeric)
-               ) |> 
-               dplyr::mutate(lba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2))),
-                             uba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2)),lower.tail=FALSE));
-  zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
-  nZBs = length(zBs);
-  dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |> 
-             dplyr::filter(type=="capture",
-                           fleet %in% c("NMFS_Trawl_1982 ","NMFS_Trawl_1989")) |>
-             tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
-             dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
+#==mature males
+st<-grep(c("N(males_mature): dataframe"),tmp,fixed=TRUE)
+tmp2<-tmp[st:(st+50)]
+tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
 
-  use_sel<-filter(dfrSel,year=="2023"&case==case_for_data_table&sex=='male')$est
-  
-  tFMB<-filter(dfrIndxFit,sex=='female',case==case_for_data_table)$prd
-  #tFMB<-c(tFMB[1:38],0,tFMB[39:length(tFMB)])
-  
-  tMMB<-filter(dfrIndxFit,sex=='male',case==case_for_data_table)$prd
-  #tMMB<-c(tMMB[1:38],0,tMMB[39:length(tMMB)]) 
-  
-  males_bio_size<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,male_wt_len,FUN='*')
-  males_95_bio_size<-males_bio_size[,15:ncol(males_bio_size)]
-  males_101_bio_size<-males_bio_size[,16:ncol(males_bio_size)]
-  males_101_bio_size[,1]<-males_101_bio_size[,1]*.5
-  
-  males_n_size_sel<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,use_sel,FUN='*')
-  males_bio_size_sel<-sweep(males_n_size_sel,2,male_wt_len,FUN='*')
-  males_95_bio_size_sel<-males_bio_size_sel[,15:ncol(males_bio_size_sel)]
-  males_101_bio_size_sel<-males_bio_size_sel[,16:ncol(males_bio_size_sel)]
-  males_101_bio_size_sel[,1]<-males_101_bio_size_sel[,1]*.5
-  
-  tot_95_bio<-apply(males_95_bio_size,1,sum)/1000000
-  tot_101_bio<-apply(males_101_bio_size,1,sum)/1000000
-  sel_95_bio<-apply(males_95_bio_size_sel,1,sum)/1000000
-  sel_101_bio<-apply(males_101_bio_size_sel,1,sum)/1000000
-  
-  males_n_size_sel<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,use_sel,FUN='*')
-  males_101_n_size_sel<-males_n_size_sel[,16:ncol(males_n_size_sel)]
-  males_101_n_size_sel[,1]<-males_101_n_size_sel[,1]*.5
-  
-  males_n_size_tot<-N_males_mat[,3:ncol(N_males_mat)]
-  males_101_n_size_tot<-males_n_size_tot[,16:ncol(males_n_size_tot)]
-  males_101_n_size_tot[,1]<-males_n_size_tot[,1]*.5
-  
-  tot_101_abn<-apply(males_101_n_size_tot,1,sum)/1000
-  sel_101_abn<-apply(males_101_n_size_sel,1,sum)/1000
-  
-   tmp_mat2<-data.frame(year=N_females_mat[,1],
-                      FMB=tFMB,
-                      MMB=tMMB,
-                      MMB_95=sel_95_bio,
-                      MMB_101=sel_101_bio,
-                      abund_101=sel_101_abn,
-                      FMB_tot=apply(sweep(N_females_mat[,3:ncol(N_females_mat)],2,female_wt_len,FUN='*'),1,sum)/1000000 ,
-                      MMB_tot=apply(sweep(N_males_mat[,3:ncol(N_females_mat)],2,male_wt_len,FUN='*'),1,sum)/1000000,
-                      MMB_95_tot=tot_95_bio,
-                      MMB_101_tot=tot_101_bio,
-                      abund_101_tot=tot_101_abn)
-  
-  write.csv(round(tmp_mat2,2),'for_ben.csv')
-  
+N_males_mat<-NULL
+for(x in 1:length(tmp3))
+  N_males_mat<-rbind(N_males_mat,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+
+#==mature females
+st<-grep(c("N(females_mature): dataframe"),tmp,fixed=TRUE)
+tmp2<-tmp[st:(st+50)]
+tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
+
+N_females_mat<-NULL
+for(x in 1:length(tmp3))
+  N_females_mat<-rbind(N_females_mat,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+
+dfrIndxFit = wtsGMACS::extractRep1Results(reslst,"Index_fit_summary") |> 
+  dplyr::mutate(
+    dplyr::across(c(year,obs,base_CV,actual_CV,q,prd,prsn_res),
+                  as.numeric)
+  ) |> 
+  dplyr::mutate(lba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2))),
+                uba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2)),lower.tail=FALSE));
+zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
+nZBs = length(zBs);
+dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |> 
+  dplyr::filter(type=="capture",
+                fleet %in% c("NMFS_Trawl_1982 ","NMFS_Trawl_1989")) |>
+  tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
+  dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
+
+use_sel<-filter(dfrSel,year=="2023"&case==case_for_data_table&sex=='male')$est
+
+tFMB<-filter(dfrIndxFit,sex=='female',case==case_for_data_table)$prd
+#tFMB<-c(tFMB[1:38],0,tFMB[39:length(tFMB)])
+
+tMMB<-filter(dfrIndxFit,sex=='male',case==case_for_data_table)$prd
+#tMMB<-c(tMMB[1:38],0,tMMB[39:length(tMMB)]) 
+
+males_bio_size<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,male_wt_len,FUN='*')
+males_95_bio_size<-males_bio_size[,15:ncol(males_bio_size)]
+males_101_bio_size<-males_bio_size[,16:ncol(males_bio_size)]
+males_101_bio_size[,1]<-males_101_bio_size[,1]*.5
+
+males_n_size_sel<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,use_sel,FUN='*')
+males_bio_size_sel<-sweep(males_n_size_sel,2,male_wt_len,FUN='*')
+males_95_bio_size_sel<-males_bio_size_sel[,15:ncol(males_bio_size_sel)]
+males_101_bio_size_sel<-males_bio_size_sel[,16:ncol(males_bio_size_sel)]
+males_101_bio_size_sel[,1]<-males_101_bio_size_sel[,1]*.5
+
+tot_95_bio<-apply(males_95_bio_size,1,sum)/1000000
+tot_101_bio<-apply(males_101_bio_size,1,sum)/1000000
+sel_95_bio<-apply(males_95_bio_size_sel,1,sum)/1000000
+sel_101_bio<-apply(males_101_bio_size_sel,1,sum)/1000000
+
+males_n_size_sel<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,use_sel,FUN='*')
+males_101_n_size_sel<-males_n_size_sel[,16:ncol(males_n_size_sel)]
+males_101_n_size_sel[,1]<-males_101_n_size_sel[,1]*.5
+
+males_n_size_tot<-N_males_mat[,3:ncol(N_males_mat)]
+males_101_n_size_tot<-males_n_size_tot[,16:ncol(males_n_size_tot)]
+males_101_n_size_tot[,1]<-males_n_size_tot[,1]*.5
+
+tot_101_abn<-apply(males_101_n_size_tot,1,sum)/1000
+sel_101_abn<-apply(males_101_n_size_sel,1,sum)/1000
+
+tmp_mat2<-data.frame(year=N_females_mat[,1],
+                     FMB=tFMB,
+                     MMB=tMMB,
+                     MMB_95=sel_95_bio,
+                     MMB_101=sel_101_bio,
+                     abund_101=sel_101_abn,
+                     FMB_tot=apply(sweep(N_females_mat[,3:ncol(N_females_mat)],2,female_wt_len,FUN='*'),1,sum)/1000000 ,
+                     MMB_tot=apply(sweep(N_males_mat[,3:ncol(N_females_mat)],2,male_wt_len,FUN='*'),1,sum)/1000000,
+                     MMB_95_tot=tot_95_bio,
+                     MMB_101_tot=tot_101_bio,
+                     abund_101_tot=tot_101_abn)
+
+write.csv(round(tmp_mat2,2),'for_ben.csv')
+
 PlotTab<- data.frame(round(tmp_mat2,2))
 colnames(PlotTab)<- c("Survey year","FMB","MMB","MMB_95","MMB_101","Abund_101","FMB_tot",
                       "MMB_tot","MMB_95_tot","MMB_101_tot","abund_95_tot")
 
 #write.csv(PlotTab,"model_est.csv")
 
- rownames(PlotTab)<- NULL
- pander(PlotTab,split.cells=10,split.table=Inf,caption="\\label{predsurvbio}Maximum likelihood estimates of morphometrically mature male biomass (MMB), mature female biomass (FMB). Columns 2-6 are subject to survey selectivity; columns 7-11 are the population values. ")
+rownames(PlotTab)<- NULL
+pander(PlotTab,split.cells=10,split.table=Inf,caption="\\label{predsurvbio}Maximum likelihood estimates of morphometrically mature male biomass (MMB), mature female biomass (FMB). Columns 2-6 are subject to survey selectivity; columns 7-11 are the population values. ")
 
 ```
 
@@ -741,26 +748,26 @@ colnames(PlotTab)<- c("Survey year","FMB","MMB","MMB_95","MMB_101","Abund_101","
 
 ```{r,echo=FALSE,warning=FALSE,message=F}
 
- #==tot males#==tot malesWeight
-  tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
-  st<-grep(c("N(males): dataframe"),tmp,fixed=TRUE)
-  tmp2<-tmp[st:(st+50)]
-  tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
-      
-  N_males<-NULL
-  for(x in 1:length(tmp3))
-    N_males<-rbind(N_males,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+#==tot males#==tot malesWeight
+tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
+st<-grep(c("N(males): dataframe"),tmp,fixed=TRUE)
+tmp2<-tmp[st:(st+50)]
+tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
 
-  #==tot_females    
-  st<-grep(c("N(females): dataframe"),tmp,fixed=TRUE)
-  tmp2<-tmp[st:(st+50)]
-  tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
-  N_females<-NULL
-  for(x in 1:length(tmp3))
-    N_females<-rbind(N_females,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
-  
- tmp_mat<-data.frame(year=N_females[,1],
-            tot_n=apply(N_males[,3:ncol(N_males)]+N_females[,3:ncol(N_females)],1,sum)/1000000)
+N_males<-NULL
+for(x in 1:length(tmp3))
+  N_males<-rbind(N_males,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+
+#==tot_females    
+st<-grep(c("N(females): dataframe"),tmp,fixed=TRUE)
+tmp2<-tmp[st:(st+50)]
+tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
+N_females<-NULL
+for(x in 1:length(tmp3))
+  N_females<-rbind(N_females,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+
+tmp_mat<-data.frame(year=N_females[,1],
+                    tot_n=apply(N_males[,3:ncol(N_males)]+N_females[,3:ncol(N_females)],1,sum)/1000000)
 
 colnames(tmp_mat)<- c("Survey year","Total numbers")
 pander(tmp_mat,split.cells=10,split.table=Inf,caption="\\label{predtotnum} Maximum likelihood estimates of total numbers of crab (billions), not subject to survey selectivity at the time of the survey. ")
@@ -771,19 +778,19 @@ pander(tmp_mat,split.cells=10,split.table=Inf,caption="\\label{predtotnum} Maxim
 
 ```{r,echo=FALSE,warning=FALSE,message=F}
 
- dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
-          dplyr::select(case,year,SSB,rec_male,)
- dfrr<-filter(dfr,case==case_for_data_table)
+dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
+  dplyr::select(case,year,SSB,rec_male,)
+dfrr<-filter(dfr,case==case_for_data_table)
 
- tmp2<-paste("reslst$repsLst$'",case_for_data_table,"'$'Fully-selected_FM_by_season_sex_and_fishery'",sep='')
- input<-eval(parse(text=tmp2))
- in_f<-as.numeric(filter(input,sex=='male'&fleet=="Pot_Fishery")$'2')
- 
-  tmp_mat<-data.frame(year=dfrr$year,
-                     mmb=round(as.numeric(dfrr$SSB),2),
-                     recruits=round(as.numeric(dfrr$rec_male)/1000000,2),
-                     f_mort=round(in_f,2))
- 
+tmp2<-paste("reslst$repsLst$'",case_for_data_table,"'$'Fully-selected_FM_by_season_sex_and_fishery'",sep='')
+input<-eval(parse(text=tmp2))
+in_f<-as.numeric(filter(input,sex=='male'&fleet=="Pot_Fishery")$'2')
+
+tmp_mat<-data.frame(year=dfrr$year,
+                    mmb=round(as.numeric(dfrr$SSB),2),
+                    recruits=round(as.numeric(dfrr$rec_male)/1000000,2),
+                    f_mort=round(in_f,2))
+
 colnames(tmp_mat)<- c("Survey year","Mature male biomass","Male recruits","Fishing mortality")
 
 rownames(tmp_mat)<- NULL
@@ -824,25 +831,25 @@ pander(tmp_mat,split.cells=10,caption="\\label{predsurvbio_tot} Maximum likeliho
 
 ##--index catch data----
 dfrIndxFit = wtsGMACS::extractRep1Results(reslst,"Index_fit_summary") |> 
-               dplyr::mutate(
-                dplyr::across(c(year,obs,base_CV,actual_CV,q,prd,prsn_res),
-                              as.numeric)
-               ) |> 
-               dplyr::mutate(lba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2))),
-                             uba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2)),lower.tail=FALSE));
+  dplyr::mutate(
+    dplyr::across(c(year,obs,base_CV,actual_CV,q,prd,prsn_res),
+                  as.numeric)
+  ) |> 
+  dplyr::mutate(lba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2))),
+                uba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2)),lower.tail=FALSE));
 
 
 colnames(dfrIndxFit)[c(13,14,15)]<-c('predicted','residuals','model')
 
 ##--go back to this when data consistent across models?----
-  p = ggplot(dfrIndxFit,aes(x=year,colour=model)) +
-        geom_point(aes(y=obs),position = position_dodge(width = 1)) +
-        geom_line(aes(y=predicted),lwd=1.1) +
-        geom_errorbar(aes(x=year,ymin = lba, ymax = uba), width = 0.2,col='black') +
-        scale_y_continuous(limits=c(0,NA)) +
-        labs(y="NMFS Survey Biomass  (1,000's t)") +
-        facet_wrap(~sex,ncol=1,scales="free_y")  +theme_bw()
- print(p)
+p = ggplot(dfrIndxFit,aes(x=year,colour=model)) +
+  geom_point(aes(y=obs),position = position_dodge(width = 1)) +
+  geom_line(aes(y=predicted),lwd=1.1) +
+  geom_errorbar(aes(x=year,ymin = lba, ymax = uba), width = 0.2,col='black') +
+  scale_y_continuous(limits=c(0,NA)) +
+  labs(y="NMFS Survey Biomass  (1,000's t)") +
+  facet_wrap(~sex,ncol=1,scales="free_y")  +theme_bw()
+print(p)
 
 
 
@@ -859,15 +866,15 @@ colnames(dfrIndxFit)[c(13,14,15)]<-c('predicted','residuals','model')
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.width=8,fig.height=6,fig.cap="\\label{growthfits}Model fits (colored lines) to the growth data (dots). Black dots are historical observations; red dots are new data for 2025."}
 
 
- dfrMnGr = wtsGMACS::extractRep1Results(reslst,"Mean growth") |> 
-              dplyr::mutate(dplyr::across(3:5,as.numeric));
+dfrMnGr = wtsGMACS::extractRep1Results(reslst,"Mean growth") |> 
+  dplyr::mutate(dplyr::across(3:5,as.numeric));
 
- ggplot(dfrMnGr)+
+ggplot(dfrMnGr)+
   geom_line(aes(x=premolt_size,y=mean_increment,col=case))+
   facet_wrap(~sex)+
   theme_bw()
 
- #==add data
+#==add data
 
 ```
 
@@ -877,25 +884,25 @@ colnames(dfrIndxFit)[c(13,14,15)]<-c('predicted','residuals','model')
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.width=8,fig.height=8,fig.cap="\\label{catchfits}Model fits to catch data."}
 
-   dfrCatFit = wtsGMACS::extractRep1Results(reslst,"Catch_fit_summary") |> 
-              dplyr::mutate(
-                dplyr::across(c(year,obs,cv,effort,HM,prd,rsd),
-                              as.numeric)
-              );
+dfrCatFit = wtsGMACS::extractRep1Results(reslst,"Catch_fit_summary") |> 
+  dplyr::mutate(
+    dplyr::across(c(year,obs,cv,effort,HM,prd,rsd),
+                  as.numeric)
+  );
 
-   
+
 colnames(dfrCatFit)[c(13,14,15)]<-c('predicted','residuals','model')
 plot_dat<-dfrCatFit
 
 ##--catch data----
 levels(plot_dat$sex)[1]<-"Non-directed bycatch"
 
-  p = ggplot(plot_dat,aes(x=year,colour=model)) + 
-        geom_point(aes(y=obs)) + 
-        geom_line(aes(y=predicted)) + 
-        scale_y_continuous(limits=c(0,NA)) + 
-        labs(y="Catch (1,000's t)") + 
-        facet_wrap(sex~type,ncol=1,scales="free_y")  +theme_bw()
+p = ggplot(plot_dat,aes(x=year,colour=model)) + 
+  geom_point(aes(y=obs)) + 
+  geom_line(aes(y=predicted)) + 
+  scale_y_continuous(limits=c(0,NA)) + 
+  labs(y="Catch (1,000's t)") + 
+  facet_wrap(sex~type,ncol=1,scales="free_y")  +theme_bw()
 
 print(p)
 
@@ -976,7 +983,7 @@ include_graphics("plots/size_comp_7.png")
 
 ```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_f_mat}Model fits to mature female survey size composition data from 1982-1988."}
 include_graphics("plots/size_comp_9.png")
-            
+
 ```
 
 \newpage
@@ -1007,7 +1014,7 @@ include_graphics("plots/size_comp_11.png")
 
 ```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_f_mat2}Model fits to mature female survey size composition data from 1989-present."}
 include_graphics("plots/size_comp_13.png")
-            
+
 ```
 
 
@@ -1023,16 +1030,16 @@ EBSdata$upper_bio_ci<-exp(log(EBSdata$BIOMASS_MT)+1.96*(sqrt(log(1+EBSdata$BIOMA
 EBSdata$lower_bio_ci<-exp(log(EBSdata$BIOMASS_MT)-1.96*(sqrt(log(1+EBSdata$BIOMASS_MT_CV^2))))
 EBSdata$upper_abn_ci<-exp(log(EBSdata$ABUNDANCE)+1.96*(sqrt(log(1+EBSdata$ABUNDANCE_CV^2))))
 EBSdata$lower_abn_ci<-exp(log(EBSdata$ABUNDANCE)-1.96*(sqrt(log(1+EBSdata$ABUNDANCE_CV^2))))
-  
+
 #==take predicted survey
 dfrN_YXMSZ = wtsGMACS::extractRep1Results(reslst,"N_YXMSZ") |> 
-                tidyr::pivot_longer(cols=!c(case,year,sex,maturity,shell_con),
-                                    names_to="size",
-                                    values_to="est") |> 
-                dplyr::mutate(dplyr::across(c(year,size,est),
-                                            as.numeric),
-                              xm=paste(maturity,sex)
-                             );
+  tidyr::pivot_longer(cols=!c(case,year,sex,maturity,shell_con),
+                      names_to="size",
+                      values_to="est") |> 
+  dplyr::mutate(dplyr::across(c(year,size,est),
+                              as.numeric),
+                xm=paste(maturity,sex)
+  );
 
 pred_101_n2<-filter(dfrN_YXMSZ,sex=='male'&size>101)%>%
   group_by(year,case)%>%
@@ -1045,20 +1052,20 @@ pred_101_n3<-filter(dfrN_YXMSZ,sex=='male'&size==97.5)%>%
 pred_101_n2$tot_ABN<-(pred_101_n2$ABN+pred_101_n3$ABN)
 
 
- male_101<-EBSdata
- div_n<-1000
- large_males2<-ggplot()+
-   geom_ribbon(data=male_101,aes(x=YEAR,ymin=lower_abn_ci/div_n,ymax=upper_abn_ci /div_n),fill='light grey')+
-   geom_line(data=male_101,aes(x=YEAR,y=ABUNDANCE/div_n))+
-   geom_point(data=male_101,aes(x=YEAR,y=ABUNDANCE/div_n))+
-   geom_line(data=pred_101_n2,aes(x=year,y=tot_ABN,color=case),lwd=1.1,alpha=0.6)+
-   theme_bw()+
-   theme(legend.position='bottom')+
-   expand_limits(y=0)+
-   xlab("")+
-   scale_y_continuous(name="Abundance (1,0000,000s)",position='left',limits=c(0,650000))
+male_101<-EBSdata
+div_n<-1000
+large_males2<-ggplot()+
+  geom_ribbon(data=male_101,aes(x=YEAR,ymin=lower_abn_ci/div_n,ymax=upper_abn_ci /div_n),fill='light grey')+
+  geom_line(data=male_101,aes(x=YEAR,y=ABUNDANCE/div_n))+
+  geom_point(data=male_101,aes(x=YEAR,y=ABUNDANCE/div_n))+
+  geom_line(data=pred_101_n2,aes(x=year,y=tot_ABN,color=case),lwd=1.1,alpha=0.6)+
+  theme_bw()+
+  theme(legend.position='bottom')+
+  expand_limits(y=0)+
+  xlab("")+
+  scale_y_continuous(name="Abundance (1,0000,000s)",position='left',limits=c(0,650000))
 
-  print(large_males2)
+print(large_males2)
 
 
 
@@ -1071,31 +1078,31 @@ pred_101_n2$tot_ABN<-(pred_101_n2$ABN+pred_101_n3$ABN)
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=7,fig.cap="\\label{select_prior}Estimated survey selectivity (lines) with normal priors derived from BSFRF selectivity experiment data. Points are the mean of the prior at a given size; intervals are 95th quantiles based on input CVs. "}
 
 
- #--selectivity----
-  zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
-  nZBs = length(zBs);
-  dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |> 
-             dplyr::filter(type=="capture",
-                           fleet %in% c("NMFS_Trawl_1982 ","NMFS_Trawl_1989")) |>
-             tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
-             dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
- 
- colnames(dfrSel)[c(5,7)]<-c("model","probability")
- plot_dat<-dfrSel[,c(5,1,2,3,4,6,7)]
- plot_dat$type[plot_dat$type=="capture"]<-"Capture"
- use_sel<-filter(plot_dat,type%in%c('capture','Capture')&fleet=="NMFS_Trawl_1989")
-      p <- ggplot() + expand_limits(y = c(0,1))+
-      geom_line(data=use_sel,aes(x=size,y=probability,col=model,linetype=type),lwd=1.1)+
-      #geom_pointrange(data=sel_prior,aes(x=size, y=mu, ymax = upper, ymin = lower), col = "black")+
-      facet_wrap(~fleet+sex,ncol=1)+theme_bw()+
-      xlab("Carapace width (mm)")+
-      ylab("Selectivity")+theme(legend.position='bottom')
- 
+#--selectivity----
+zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
+nZBs = length(zBs);
+dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |> 
+  dplyr::filter(type=="capture",
+                fleet %in% c("NMFS_Trawl_1982 ","NMFS_Trawl_1989")) |>
+  tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
+  dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
 
- print(p)     
-      
-      
-      
+colnames(dfrSel)[c(5,7)]<-c("model","probability")
+plot_dat<-dfrSel[,c(5,1,2,3,4,6,7)]
+plot_dat$type[plot_dat$type=="capture"]<-"Capture"
+use_sel<-filter(plot_dat,type%in%c('capture','Capture')&fleet=="NMFS_Trawl_1989")
+p <- ggplot() + expand_limits(y = c(0,1))+
+  geom_line(data=use_sel,aes(x=size,y=probability,col=model,linetype=type),lwd=1.1)+
+  #geom_pointrange(data=sel_prior,aes(x=size, y=mu, ymax = upper, ymin = lower), col = "black")+
+  facet_wrap(~fleet+sex,ncol=1)+theme_bw()+
+  xlab("Carapace width (mm)")+
+  ylab("Selectivity")+theme(legend.position='bottom')
+
+
+print(p)     
+
+
+
 
 ```
 
@@ -1108,39 +1115,39 @@ pred_101_n2$tot_ABN<-(pred_101_n2$ABN+pred_101_n3$ABN)
 zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
 nZBs = length(zBs);
 dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |> 
-           dplyr::filter(type!="discard",
-                         fleet %in% c("Pot_Fishery","Trawl_Bycatch")) |>
-           tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
-           dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
+  dplyr::filter(type!="discard",
+                fleet %in% c("Pot_Fishery","Trawl_Bycatch")) |>
+  tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
+  dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
 
 
- colnames(dfrSel)[c(5,7)]<-c("model","probability")
- plot_dat<-dfrSel
- plot_dat$type[plot_dat$type=="capture"]<-"Capture"
-  fish_mdf<-filter(plot_dat,fleet%in%c("Pot_Fishery","Trawl_Bycatch"))
-  levels(fish_mdf$fleet)[2]<-"Non-directed bycatch"
-  fish_mdf$type[fish_mdf$type=="retained"]<-"Retained"
-    p <- ggplot(fish_mdf) + expand_limits(y = c(0,1))+
-      geom_line(aes(x=size,y=probability,col=model,linetype=type),lwd=1.15,alpha=.75)+
-      facet_wrap(~fleet+sex)+theme_bw()+theme(legend.position='bottom')
- 
-     print(p)
+colnames(dfrSel)[c(5,7)]<-c("model","probability")
+plot_dat<-dfrSel
+plot_dat$type[plot_dat$type=="capture"]<-"Capture"
+fish_mdf<-filter(plot_dat,fleet%in%c("Pot_Fishery","Trawl_Bycatch"))
+levels(fish_mdf$fleet)[2]<-"Non-directed bycatch"
+fish_mdf$type[fish_mdf$type=="retained"]<-"Retained"
+p <- ggplot(fish_mdf) + expand_limits(y = c(0,1))+
+  geom_line(aes(x=size,y=probability,col=model,linetype=type),lwd=1.15,alpha=.75)+
+  facet_wrap(~fleet+sex)+theme_bw()+theme(legend.position='bottom')
 
-  
+print(p)
+
+
 ```
 
 \newpage
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{predfmort}Estimated fishing mortalities for the directed and non-directed fisheries."}
 
- tmp<-data.frame(wtsGMACS::extractRep1Results(reslst,"Fully-selected_FM_by_season_sex_and_fishery"))
- colnames(tmp)<-c("Sex","Fleet","Year","s1","s2","s3","Model")
- levels(tmp$Fleet)[2]<-"Non-directed bycatch"
- ggplot(data = filter(tmp,Fleet%in%c("Pot_Fishery","Non-directed bycatch"))) + 
-   geom_line(aes(x=as.numeric(Year), y=as.numeric(s2),col=Model,group=Model),lwd=1.25,alpha=.6)+ 
-   facet_grid(Fleet ~ Sex,scale='free_y') + 
-   theme_bw()+
-   theme(legend.position=c(.2,.8))
+tmp<-data.frame(wtsGMACS::extractRep1Results(reslst,"Fully-selected_FM_by_season_sex_and_fishery"))
+colnames(tmp)<-c("Sex","Fleet","Year","s1","s2","s3","Model")
+levels(tmp$Fleet)[2]<-"Non-directed bycatch"
+ggplot(data = filter(tmp,Fleet%in%c("Pot_Fishery","Non-directed bycatch"))) + 
+  geom_line(aes(x=as.numeric(Year), y=as.numeric(s2),col=Model,group=Model),lwd=1.25,alpha=.6)+ 
+  facet_grid(Fleet ~ Sex,scale='free_y') + 
+  theme_bw()+
+  theme(legend.position=c(.2,.8))
 
 ```
 
@@ -1149,38 +1156,38 @@ dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |>
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{predmat}Estimated (black line) or specified (colored lines) probability(s) of maturing for male crab."}
 
- tmp2<-paste("reslst$outsLst$'",case_for_data_table,"'$mature_probability",sep='')
- tmp3<-paste("reslst$outsLst$'","25.1 gmacs (up + mature)","'$mature_probability",sep='')
- tmp<-eval(parse(text=tmp2))
- tm<-eval(parse(text=tmp3))
- 
-   plotdat<-melt(tmp,id.vars=c("Sex","Year"))
-   colnames(plotdat)[3:4]<-c("width","prob")
-   plotdat[,3]<-as.numeric(as.character(plotdat[,3]))
-   plotdat[,4]<-as.numeric(plotdat[,4])
-   p <- ggplot() +
-        expand_limits(y = c(0, 1)) +
-        labs(x = "Carapace width (mm)", y ="Probability of terminal molt")+ 
-     geom_line(data=plotdat, aes(x = width, y = prob,col = Year,group=Year),lwd=1.15,alpha=.8)+
-     guides(linetype='none')+
-     theme_bw()+theme(legend.position='none')+
-     facet_wrap(~Sex)
+tmp2<-paste("reslst$outsLst$'",case_for_data_table,"'$mature_probability",sep='')
+tmp3<-paste("reslst$outsLst$'","25.1 gmacs (up + mature)","'$mature_probability",sep='')
+tmp<-eval(parse(text=tmp2))
+tm<-eval(parse(text=tmp3))
 
-   
-   plotdat<-melt(tm,id.vars=c("Sex","Year"))
-   colnames(plotdat)[3:4]<-c("width","prob")
-   plotdat[,3]<-as.numeric(as.character(plotdat[,3]))
-   plotdat[,4]<-as.numeric(plotdat[,4])
-   q <- ggplot() +
-        expand_limits(y = c(0, 1)) +
-        labs(x = "Carapace width (mm)", y ="Probability of terminal molt")+ 
-     geom_line(data=plotdat, aes(x = width, y = prob,col = Year,group=Year),lwd=1.15,alpha=.8)+
-     guides(linetype='none')+
-     theme_bw()+theme(legend.position='bottom')+
-     facet_wrap(~Sex)
+plotdat<-melt(tmp,id.vars=c("Sex","Year"))
+colnames(plotdat)[3:4]<-c("width","prob")
+plotdat[,3]<-as.numeric(as.character(plotdat[,3]))
+plotdat[,4]<-as.numeric(plotdat[,4])
+p <- ggplot() +
+  expand_limits(y = c(0, 1)) +
+  labs(x = "Carapace width (mm)", y ="Probability of terminal molt")+ 
+  geom_line(data=plotdat, aes(x = width, y = prob,col = Year,group=Year),lwd=1.15,alpha=.8)+
+  guides(linetype='none')+
+  theme_bw()+theme(legend.position='none')+
+  facet_wrap(~Sex)
 
-    p/q
-    
+
+plotdat<-melt(tm,id.vars=c("Sex","Year"))
+colnames(plotdat)[3:4]<-c("width","prob")
+plotdat[,3]<-as.numeric(as.character(plotdat[,3]))
+plotdat[,4]<-as.numeric(plotdat[,4])
+q <- ggplot() +
+  expand_limits(y = c(0, 1)) +
+  labs(x = "Carapace width (mm)", y ="Probability of terminal molt")+ 
+  geom_line(data=plotdat, aes(x = width, y = prob,col = Year,group=Year),lwd=1.15,alpha=.8)+
+  guides(linetype='none')+
+  theme_bw()+theme(legend.position='bottom')+
+  facet_wrap(~Sex)
+
+p/q
+
 
 ```
 
@@ -1190,10 +1197,10 @@ dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |>
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{recruits}Estimated recruitment by sex (bottom) and proportions recruiting to length bin (top) by model."}
 
 
-  dfr_m = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
-          dplyr::select(case,year,rec_male)
-  dfr_f = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
-          dplyr::select(case,year,rec_female) 
+dfr_m = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
+  dplyr::select(case,year,rec_male)
+dfr_f = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
+  dplyr::select(case,year,rec_female) 
 
 dfr_m$sex<-"Male"
 colnames(dfr_m)<-c("model","Year","Recruits","sex")
@@ -1207,7 +1214,7 @@ plot_dat$Year<-as.numeric(plot_dat$Year)
 ggplot(plot_dat)+
   geom_line(aes(x=Year,y=Recruits,col=model),lwd=1.15)+
   theme_bw()+facet_wrap(~sex,ncol=1,scales='free_y')
- 
+
 
 ``` 
 
@@ -1217,34 +1224,34 @@ ggplot(plot_dat)+
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{nat_m}Estimated natural mortality by sex and maturity state. Natural mortality in all years previous to 2018 and after 2019 are equal to the estimated M in 2017. "}
 
-     dfrMbyXM = wtsGMACS::extractRep1Results(reslst,"Natural_mortality-by-class") |> 
-                 tidyr::pivot_longer(cols=!c(case,year,sex,maturity),
-                                    names_to="size",values_to="est") |> 
-                dplyr::mutate(dplyr::across(c(year,size,est),as.numeric)) |> 
-                dplyr::mutate(xm=paste(maturity,sex)) |> 
-                dplyr::group_by(case,xm,sex,maturity,year) |> 
-                dplyr::ungroup();
-    new_m<- filter(dfrMbyXM,size==27.5)
-     
-  colnames(new_m)[c(1,2,4,6)]<-c("Year","Sex","Model","M")
-  
-  plot_dat<-new_m[,c(4,1,2,6,3)]
-   plot_dat$maturity[plot_dat$maturity=='immature']<-"Immature"  
-   plot_dat$maturity[plot_dat$maturity=='mature']<-"Mature"    
-      ggplot(plot_dat, aes(x = Year, y = M, colour = Model))+
-      geom_line(lwd=1.15,alpha=.8)+
-      geom_point(size=2)+
-     facet_wrap(~Sex+maturity)+
-     theme_bw()+theme(legend.position=c(.8,.8))+
-      xlim(2015,2022)+expand_limits(y=0)+
-        ylim(0,5)
-  
+dfrMbyXM = wtsGMACS::extractRep1Results(reslst,"Natural_mortality-by-class") |> 
+  tidyr::pivot_longer(cols=!c(case,year,sex,maturity),
+                      names_to="size",values_to="est") |> 
+  dplyr::mutate(dplyr::across(c(year,size,est),as.numeric)) |> 
+  dplyr::mutate(xm=paste(maturity,sex)) |> 
+  dplyr::group_by(case,xm,sex,maturity,year) |> 
+  dplyr::ungroup();
+new_m<- filter(dfrMbyXM,size==27.5)
 
-    
-    
+colnames(new_m)[c(1,2,4,6)]<-c("Year","Sex","Model","M")
+
+plot_dat<-new_m[,c(4,1,2,6,3)]
+plot_dat$maturity[plot_dat$maturity=='immature']<-"Immature"  
+plot_dat$maturity[plot_dat$maturity=='mature']<-"Mature"    
+ggplot(plot_dat, aes(x = Year, y = M, colour = Model))+
+  geom_line(lwd=1.15,alpha=.8)+
+  geom_point(size=2)+
+  facet_wrap(~Sex+maturity)+
+  theme_bw()+theme(legend.position=c(.8,.8))+
+  xlim(2015,2022)+expand_limits(y=0)+
+  ylim(0,5)
+
+
+
+
 
 ```
- 
+
 \newpage
 
 
@@ -1254,7 +1261,7 @@ ggplot(plot_dat)+
 #=========================================================
 
 dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
-          dplyr::select(case,year,SSB)
+  dplyr::select(case,year,SSB)
 #==add reference points back in
 ggplot(dfr)+
   geom_line(aes(x=as.numeric(year),y=as.numeric(SSB),col=case))+
