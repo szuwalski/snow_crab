@@ -4,3 +4,5 @@
 .Ruserdata
 *.exe
 *.tmp
+# Ignore all jittering folders
+**/jitter/

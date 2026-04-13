@@ -1,7 +1,7 @@
 #datafile                             
-25_snow_update_hyb_fsurv_and_fsh_newmat.dat                          
+25_snow_update_hyb_surv_and_fsh_newmat.dat                          
 #controlfile                             
-25_snow_update_hyb_fsurv_and_fsh_newmat.ctl                            
+snow.ctl                            
 #projectionfile                             
 snow.prj                             
 # Weight unit                           
