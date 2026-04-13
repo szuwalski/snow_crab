@@ -89,11 +89,7 @@ if (nCases > 1) {
 ABC_buffer     <- 0.8
 chosen_ind     <- 1
 OFL_fleet_ind  <- 0
-fldrs          <- c("25_gmacs/", "25_gmacs_update/", "25_gmacs_update_compfix/", "25_gmacs_update_plus_group/",
-                    "25_gmacs_update_hyb_surv/", "25_gmacs_update_hyb_fishery/", "25_gmacs_update_hyb_surv_and_fsh/", 
-                    "25_gmacs_update_newmat/",
-                    "25_gmacs_update_newmat_compfix/",
-                    "25_gmacs_update_hyb_surv_and_fsh_newmat/")
+source("0-models.R") # Load model definitions
 
 # Case selection
 case_for_resids     <- "25.1 gmacs" # model print size comp residuals for
@@ -196,8 +192,7 @@ if(make_proj_fig==1)
     summarize(med_ssb=median(value))
   
   #==compare to survey biomass
-  #fldrs = c("25_gmacs_func/")
-  tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
+  tmp<-readLines(paste(model_defs[1],"/Gmacsall.out",sep=''))
   male_wt_len<-as.numeric(filter(reslst$repsLst$'25.3 gmacs'$IndivWeightByXM,Sex=="male"&Year=="1982"&Maturity=='mature')[,4:25])
   
   #==mature males
@@ -271,10 +266,6 @@ Author response
 *2024(10) SSC. Geostatistical (e.g. VAST) modeling of trawl survey data including both the NBS and EBS should be prioritized. This could help understand some of the inconsistent recruitment/growth trends observed in recent years as well as prepare for potential changes in stock distribution or productivity under future warming of the Bering Sea. Geostatistical modeling should evaluate alternative error distributions and other model configurations as appropriate.*
 Author response
 
-
-
-
-INSERT ALL COMMENTS AND HOW THIS DOC ADDRESSES THEM (OR DOESN'T)
 
 \newpage
 
@@ -510,31 +501,48 @@ Zheng, J., G.H. Kruse, and D.R. Ackley.  2001. Spatial distribution and recruitm
 
 ```{r,echo=FALSE,warning=FALSE,message=F}
 
-tot_likes<-matrix(nrow=9,ncol=length(fldrs))
-rownames(tot_likes)<-seq(1,9)
-for(y in 1:length(fldrs))
-{
-  tmp<-readLines(paste(fldrs[y],"/Gmacsall.out",sep=''))
-  st<-grep("Likelihoods_by_type",tmp)[1]
-  for(z in 1:9)
-  {
-    if(y==1)
-    {
-      bleh<-unlist(strsplit(tmp[st+z],split=' '))
-      tot_likes[z,y]<-as.numeric(bleh[grep(":",bleh)+1])
-    }
-    if(y>=2)
-    {
-      bleh<-unlist(strsplit(tmp[st+z],split=' '))
-      tot_likes[z,y]<-as.numeric(bleh[2])
-      rownames(tot_likes)[z]<-bleh[1]
-    }
-  }
+extract_likelihoods <- function(path) {
+  out_file <- file.path(path, "Gmacsall.out")
+  if (!file.exists(out_file)) return(rep(NA, 9))
+  
+  tmp <- readLines(out_file)
+  st  <- grep("Likelihoods_by_type", tmp)[1]
+  end <- grep("EOL", tmp)[1]
+  
+  # Extract the 9 rows following the header
+  rows <- tmp[(st + 1):(end - 1)]
+  
+  # Clean the strings: remove colons and split by one or more spaces
+  clean_rows <- gsub(":", "", rows)
+  parts <- strsplit(trimws(clean_rows), " +")
+  
+  # The numeric value is typically the last element in the line
+  vals <- sapply(parts, function(x) as.numeric(tail(x, 1)))
+  cols <- sapply(parts, function(x) x[1])
+  dat <- data.frame(Object = cols, Value = vals)
+  colnames(dat)[2] <- path
+  return(dat)
 }
 
-colnames(tot_likes) = c("25.1 gmacs","25.1 gmacs (update)","25.1 gmace (up + hyb_surv)","25.1 gmace (up + mature)")
-rownames(tot_likes)[1:5]<-c("Catch","Index","Size","SRR","Tag")
-kable(round(tot_likes[-8,],2),split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{like_comp_tot}Likelihood components by category and model.")
+# Apply the function to all models in model_defs
+tot_likes <- lapply(model_defs, extract_likelihoods)
+tot_likes <- tot_likes %>% purrr::reduce(full_join)
+
+# Format for the table
+tot_likes$Object[1:5] <- c("Catch", "Index", "Size", "SRR", "Tag")
+tot_likes <- tot_likes[c(1:8, 10:11, 9),]
+tot_likes[is.na(tot_likes)] <- 0
+rownames(tot_likes) <- tot_likes$Object
+tot_likes <- tot_likes[,-1]
+colnames(tot_likes) <- names(model_defs)
+
+# Use kable to render, excluding row 8 as in your original snippet
+kable(
+  round(tot_likes, 2), 
+  split.cells = c(25, rep(12, ncol(tot_likes))), 
+  justify = c("left", rep("center", ncol(tot_likes))), 
+  caption = "\\label{like_comp_tot}Likelihood components by category and model."
+)
 
 
 ```
@@ -545,9 +553,9 @@ kable(round(tot_likes[-8,],2),split.cells=c(25,rep(12,5)),justify=c("left",rep("
 
 
 # keep_like_big<-NULL
-# for(y in 1:length(fldrs))
+# for(y in 1:length(model_defs))
 #     {
-#       tmp<-readLines(paste(fldrs[y],"/Gmacsall.out",sep=''))
+#       tmp<-readLines(paste(model_defs[y],"/Gmacsall.out",sep=''))
 #       if(y==1)
 #        st<-grep("Raw likelihood",tmp)
 #       if(y>1)
@@ -564,7 +572,7 @@ kable(round(tot_likes[-8,],2),split.cells=c(25,rep(12,5)),justify=c("left",rep("
 #       keep_like_big<-cbind(keep_like_big,keep_like)
 # }
 # 
-# colnames(keep_like_big) = colnames(fldrs)
+# colnames(keep_like_big) = colnames(model_defs)
 # rownames(keep_like_big) <- c("Retained","Discard (male)","Discard (female)","Non-directed",
 #                             "NMFS 1982-89 (m)","NMFS 1989-present(m)","NMFS 1982-88 (f)","NMFS 1989-present (f)",
 #                             "Retained SC","Total SC","Discard SC (f)","Bycatch SC (f)","Bycatch SC (m)",
@@ -579,16 +587,19 @@ kable(round(tot_likes[-8,],2),split.cells=c(25,rep(12,5)),justify=c("left",rep("
 \newpage
 
 ```{r,echo=FALSE,warning=FALSE,message=F}
+# Extract and pivot estimated parameters
+# 'estimate' is the standard column name for the parameter value in dfrPars
+est_pars <- reslst$dfrPars %>%
+  dplyr::select(param, case, value) %>%
+  tidyr::pivot_wider(names_from = case, values_from = value) %>%
+  # Automatically round all columns to 2 decimal places
+  dplyr::mutate(across(where(is.numeric), ~round(.x, 2)))
 
-#==get catch 
-
-estpars<-dcast(reslst$dfrPars[,c(1,2,3,6,7)],param~case, fun.aggregate = mean)
-estpars[,2:3]<-round(estpars[,2:3],2)
-
-#==table catch
-kable(estpars,caption="\\label{est_par} Parameters estimated in the assessment. 'Theta' parameters are primarily the values for initial numbers at size. See control file for more in depth descriptions.") 
-
-
+# Generate the table
+kable(
+  est_pars, 
+  caption = "\\label{est_par} Parameters estimated in the assessment. 'Theta' parameters are primarily the values for initial numbers at size. See control file for more in depth descriptions."
+)
 ```
 
 \newpage
@@ -621,22 +632,22 @@ pander(round(PlotTab,2),split.cells=10,caption="\\label{obscatch}Observed retain
 ```{r,echo=FALSE,warning=FALSE,message=F}
 
 
-PlotTab<- data.frame(Model=fldrs,
-                     MMB=rep(0,length(fldrs)),
-                     B35=rep(0,length(fldrs)),
-                     F35=rep(0,length(fldrs)),
-                     FOFL=rep(0,length(fldrs)),
-                     OFL=rep(0,length(fldrs)),
-                     M=rep(0,length(fldrs)),
-                     avg_rec=rep(0,length(fldrs)),
-                     Status=rep(0,length(fldrs)))
+PlotTab<- data.frame(Model=names(model_defs),
+                     MMB=rep(0,length(model_defs)),
+                     B35=rep(0,length(model_defs)),
+                     F35=rep(0,length(model_defs)),
+                     FOFL=rep(0,length(model_defs)),
+                     OFL=rep(0,length(model_defs)),
+                     M=rep(0,length(model_defs)),
+                     avg_rec=rep(0,length(model_defs)),
+                     Status=rep(0,length(model_defs)))
 
 take_row<-c(1,2,3,4,8,12,13)
-keep_out<-matrix(nrow=length(fldrs),ncol=length(take_row))
+keep_out<-matrix(nrow=length(model_defs),ncol=length(take_row))
 colnames(keep_out)<-seq(1,ncol(keep_out))
-for(y in 1:length(fldrs))
+for(y in 1:length(model_defs))
 {
-  tmp<-readLines(paste(fldrs[y],"/Gmacsall.out",sep=''))
+  tmp<-readLines(paste(model_defs[y],"/Gmacsall.out",sep=''))
   st<-grep("BMSY",tmp)[1]
   end<-grep("Ofl",tmp)[length(grep("Ofl",tmp))]
   use<-tmp[st:end]
@@ -652,7 +663,7 @@ for(y in 1:length(fldrs))
 sq_tk<-PlotTab[,c(3,9,6,4,5)]
 colnames(sq_tk)<-colnames(keep_out[,c(1:5)])
 man_tab<-round(keep_out[,c(1:5)],2)
-rownames(man_tab) = fldrs
+rownames(man_tab) = names(model_defs)
 
 kable(man_tab,split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{stepchange}Management quantities derived from maximum likelihood estimates by model using Tier 3 reference points. Reported natural mortality is for mature males, average recruitment is for males, and status and MMB were estimates for February 15 of the completed crab year.")
 
@@ -665,7 +676,7 @@ kable(man_tab,split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),capt
 
 ```{r,echo=FALSE,warning=FALSE,message=F}
 
-tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
+tmp<-readLines(paste(model_defs[1],"/Gmacsall.out",sep=''))
 tmp2<-paste("reslst$repsLst$'",case_for_data_table,"'$IndivWeightByXM",sep='')
 input<-eval(parse(text=tmp2))
 
@@ -771,7 +782,7 @@ pander(PlotTab,split.cells=10,split.table=Inf,caption="\\label{predsurvbio}Maxim
 ```{r,echo=FALSE,warning=FALSE,message=F}
 
 #==tot males#==tot malesWeight
-tmp<-readLines(paste(fldrs[1],"/Gmacsall.out",sep=''))
+tmp<-readLines(paste(model_defs[1],"/Gmacsall.out",sep=''))
 st<-grep(c("N(males): dataframe"),tmp,fixed=TRUE)
 tmp2<-tmp[st:(st+50)]
 tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
