@@ -89,9 +89,10 @@ if (nCases > 1) {
 ABC_buffer     <- 0.8
 chosen_ind     <- 1
 OFL_fleet_ind  <- 0
-fldrs          <- c("25_gmacs/", "25_gmacs_update/", 
+fldrs          <- c("25_gmacs/", "25_gmacs_update/", "25_gmacs_update_compfix/", "25_gmacs_update_plus_group/",
                     "25_gmacs_update_hyb_surv/", "25_gmacs_update_hyb_fishery/", "25_gmacs_update_hyb_surv_and_fsh/", 
                     "25_gmacs_update_newmat/",
+                    "25_gmacs_update_newmat_compfix/",
                     "25_gmacs_update_hyb_surv_and_fsh_newmat/")
 
 # Case selection
@@ -248,8 +249,29 @@ if(make_proj_fig==1)
 # B. Comments, responses and assessment summary
 ## SSC and CPT comments + author responses from June 2025
 
-*SSC comments in italics*
+*2024(10) SSC. SSC recommends standardizing the approach to the Tier 4 fallback across BBRKC, Tanner and snow crab assessments so that the same methods are used for each including all mature male biomass, a BMSY proxy based on the time-series of REMA-smoothed survey estimates and an FMSY proxy based on the best estimate of natural mortality (from the Tier 3 model). As the SSC intends the Tier 4 calculation only as a fallback if the Tier 3 analysis fails to converge, no other Tier 4 calculations need to be included in future assessments.*
 Author response
+
+*2024(6) CPT. Tier 4 fallback - CPT supports: The author suggested an alternative for snow crab to the basic Tier 4 calculation that is being brought forward for other stocks. Specifically, a fallback Tier 4 option would be calculated as the vulnerable biomass in this year’s survey (not smoothed, and vulnerable defined by a cutoff of 95 mm CW), decremented by the proportion of natural mortality that occurs between the time of the survey and the fishery, and M applied as the proxy for FMSY to calculate the Tier 4 OFL. The motivations identified for using the annual survey design-based estimate of vulnerable biomass rather than a REMA smooth through the survey time series were: 1) that the high number of positive stations for snow crab on survey (238 stations in 2023) make the design-based estimate a robust measure of annual biomass; and 2) that the large interannual fluctuations in biomass observed in some recent years would be poorly captured by a smooth. The motivation for decrementing the biomass estimate by the proportion of natural mortality occurring between the survey and the fishery is that failing to account for this mortality could lead to unintentionally high values of F if the Tier 4 fallback was used.*
+Author response
+
+*2024(10) SSC. The SSC highlighted that more research is needed on the basic reproductive biology of snow crab, specifically addressing the question of whether small males can and do mate with large females and produce progeny that will be large males under the right environmental conditions. The SSC strongly supports the proposed collaborative research to explore in situ observations of mating crab using a camera sled.*
+Author response
+
+
+*2024(10) SSC. The highest priority would be to continue to refine the Maximin analysis as requested by the SSC in June 2024, specially using values of steepness of 0.50, 0.67, and 0.80, and considering both the Beverton-Holt and Ricker stock recruitment relationships. The yield analysis also indicated that fishing mortality rates much lower than F35% achieved a high percentage of MSY, indicating potential flexibility in specifying reference points. The SSC suggested that some type of collaborative work during the spring, perhaps including SSC members and/or others might facilitate additional progress on this topic. The SSC is interested in developing a wider range of options for reference points for snow crab for consideration in the next assessment cycle.*
+Author response
+
+*2024(10) SSC. The SSC again requests an analysis of the probability of maturing/terminal molt which addresses the observation error in these data and the lack of a monotonically increasing curve. A hierarchical analysis that treats years as random effects might be a starting point. The SSC would also like to better understand the sampling design for the molt data and is concerned about the weighting of the spatial samples in the analysis; weighting should be based on abundance if the sampling rate differs by area (which it would, unless abundance were uniform and/or the targets were in direct proportion to abundance).*
+Author response
+
+*2024(10) SSC. Investigate whether there is information outside the assessment model (e.g., larval or post-settlement data) or in the model, supporting estimated skewed sex-ratios at recruitment and the mismatch between recent large recruitments for males and females occurring in different years. Explore whether the estimated large differences in male and female recruitment years could be related to the lack of fit to molt-increment data.*
+Author response
+
+*2024(10) SSC. Geostatistical (e.g. VAST) modeling of trawl survey data including both the NBS and EBS should be prioritized. This could help understand some of the inconsistent recruitment/growth trends observed in recent years as well as prepare for potential changes in stock distribution or productivity under future warming of the Bering Sea. Geostatistical modeling should evaluate alternative error distributions and other model configurations as appropriate.*
+Author response
+
+
 
 
 INSERT ALL COMMENTS AND HOW THIS DOC ADDRESSES THEM (OR DOESN'T)
