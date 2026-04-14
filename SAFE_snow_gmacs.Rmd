@@ -58,7 +58,7 @@ panderOptions('table.split.table', Inf)
 
 
 ```{r GMACS-getModelResults, include=FALSE}
-# Load model results
+#  --- Load model results ---
 # Ensure rda_ModelsResLst.RData is in the working directory
 # it contains all the results from '05_buck_read_results.R"
 reslst <- wtsUtilities::getObj("rda_ModelsResLst.RData")
@@ -80,11 +80,6 @@ if (nCases > 1) {
   strCases <- clean_cases
 }
 
-```
-
-\newpage
-
-```{r,echo=F,message=FALSE,warning=F,include=FALSE}
 # --- Report Configuration ---
 ABC_buffer     <- 0.8
 chosen_ind     <- 1
@@ -93,7 +88,15 @@ source("0-models.R") # Load model definitions
 
 # Case selection
 case_for_resids     <- "25.1 gmacs" # model print size comp residuals for
-case_for_data_table <- "25.1 gmacs"
+case_for_data_table <- c("25.1 gmacs", "25.1 gmacs (update + hyb_fishery)")
+report_model <- model_defs[1]
+
+```
+
+\newpage
+
+```{r,echo=F,message=FALSE,warning=F,include=FALSE}
+
 
 # Global Switches
 do_size_comps  <- 1 # Set to 1 to regenerate PNGs (can take time)
@@ -121,7 +124,7 @@ if(do_size_comps==1)
       theme_bw() +
       labs(x = "Carapace width (mm)", y = "Proportion", 
            title = paste(tmp$fleet[1], tmp$sex[1], tmp$comp_type[1], tmp$maturity[1], sep = " / "))
-
+    
     ggsave(paste0("plots/size_comp_", curr_id, ".png"), p, height = 8, width = 8, dpi = 300)
     
     # Residual Plot for specific case
@@ -133,7 +136,7 @@ if(do_size_comps==1)
       geom_point(aes(x = year, y = size, size = abs(raw_res), col = as.factor(sign(raw_res))), alpha = 0.9) +
       theme_bw() +
       labs(x = "Year", y = "Carapace width (mm)", col = "Residual direction", size = "Raw residual size")
-
+    
     ggsave(paste0("plots/size_comp_resid_", curr_id, ".png"), p_res, height = 10, width = 8, dpi = 300)
   }
 }
@@ -605,22 +608,49 @@ kable(
 \newpage
 
 ```{r,echo=FALSE,warning=FALSE,message=F}
+# 1. Extract and combine data from multiple cases
+catch_comparison <- case_for_data_table %>%
+  purrr::map_dfr(function(case_name) {
+    reslst$repsLst[[case_name]]$Catch_fit_summary %>%
+      dplyr::transmute(
+        Model = case_name,
+        Year = as.numeric(year),
+        # Create descriptive labels for the catch categories
+        Category = dplyr::case_when(
+          type == "retained" ~ "Retained (kt)",
+          type == "discarded" & sex == "female" ~ "Discard Female",
+          type == "discarded" & sex == "male" & fleet == "Pot_Fishery" ~ "Discard Male Pot",
+          fleet == "Trawl_Bycatch" ~ "Non-directed Bycatch",
+          TRUE ~ paste(type, sex, fleet)
+        ),
+        obs = as.numeric(obs)
+      )
+  })
 
-tmp<-paste("reslst$repsLst$'",case_for_data_table,"'$Catch_fit_summary",sep='')
-input<-eval(parse(text=tmp))
-PlotTab<-dcast(input[,c(2,3,5,6,8)],year~sex+fleet+type,value.var=c("obs"))
-colnames(PlotTab)<- c("Year","Discard (females)","Discard (males)","Retained catch (kt)","Non-directed bycatch")
-rownames(PlotTab)<- NULL
-PlotTab<-data.frame(Year=as.numeric(PlotTab$Year),
-                    a=as.numeric(PlotTab$'Discard (females)'),
-                    b=as.numeric(PlotTab$'Discard (males)'),
-                    s=as.numeric(PlotTab$'Retained catch (kt)'),
-                    d=as.numeric(PlotTab$'Non-directed bycatch'))
+# 2. Pivot the data so models are side-by-side or categories are columns
+# Here we create a "Wide" table where columns represent Category + Model
+PlotTab <- catch_comparison %>%
+  mutate(Model = case_when(
+    Model == case_for_data_table[2] ~ " + hybrids",
+    Model == case_for_data_table[1] ~ ""
+  )) %>% 
+  dplyr::filter(!((Model == " + hybrids" & Category == "Retained (kt)") |
+                    (Model == " + hybrids" & Category == "Non-directed Bycatch"))) %>%
+  tidyr::pivot_wider(
+    names_from = c(Category, Model), 
+    values_from = obs,
+    names_sep = ""
+  ) %>%
+  dplyr::arrange(Year) %>%
+  dplyr::select("Year", "Retained (kt)", "Non-directed Bycatch", "Discard Male Pot", "Discard Male Pot + hybrids", "Discard Female", "Discard Female + hybrids")
+PlotTab[is.na(PlotTab)] <- 0
 
-PlotTab[is.na(PlotTab)]<-0
-
-colnames(PlotTab)<-c("Year",'Discard (females)','Discard (males)','Retained catch','Non-directed bycatch')
-pander(round(PlotTab,2),split.cells=10,caption="\\label{obscatch}Observed retained catches, discarded catch, and bycatch. Discards and bycatch do not have assumed mortalities applied. Units are 1,000 tonnes.")
+# 3. Render with pander
+pander::pander(
+  round(PlotTab, 2), 
+  split.cells = 10, 
+  caption = "\\label{obscatch} Comparison of observed retained catches, discards, and bycatch between base and hybrid cases (Units: 1,000 tonnes)."
+)
 
 
 ```
@@ -630,44 +660,57 @@ pander(round(PlotTab,2),split.cells=10,caption="\\label{obscatch}Observed retain
 \newpage
 
 ```{r,echo=FALSE,warning=FALSE,message=F}
+# Define the target management parameters to extract
+# We map the GMACS label to the column index based on your logic:
+# BMSY, Status, FMSY usually in index 3; FOFL, OFL in index 4.
+mgmt_targets <- list(
+  "BMSY"   = 3,
+  "Bcurr/BMSY" = 3,
+  "Fmsy"   = 4,
+  "Fofl"   = 4,
+  "OFL"    = 3
+)
 
-
-PlotTab<- data.frame(Model=names(model_defs),
-                     MMB=rep(0,length(model_defs)),
-                     B35=rep(0,length(model_defs)),
-                     F35=rep(0,length(model_defs)),
-                     FOFL=rep(0,length(model_defs)),
-                     OFL=rep(0,length(model_defs)),
-                     M=rep(0,length(model_defs)),
-                     avg_rec=rep(0,length(model_defs)),
-                     Status=rep(0,length(model_defs)))
-
-take_row<-c(1,2,3,4,8,12,13)
-keep_out<-matrix(nrow=length(model_defs),ncol=length(take_row))
-colnames(keep_out)<-seq(1,ncol(keep_out))
-for(y in 1:length(model_defs))
-{
-  tmp<-readLines(paste(model_defs[y],"/Gmacsall.out",sep=''))
-  st<-grep("BMSY",tmp)[1]
-  end<-grep("Ofl",tmp)[length(grep("Ofl",tmp))]
-  use<-tmp[st:end]
-  for(x in 1:length(take_row))
-  {
-    if(x<4)
-      keep_out[y,x]<-as.numeric(strsplit(use[take_row[x]],split=" ")[[1]][3])
-    if(x>=4)
-      keep_out[y,x]<-as.numeric(strsplit(use[take_row[x]],split=" ")[[1]][4])
-    colnames(keep_out)[x]<-strsplit(use[take_row[x]],split=" ")[[1]][1]
-  }
+# Helper function to extract management quantities from one model folder
+extract_mgmt_quantities <- function(path, model_name) {
+  out_file <- file.path(path, "Gmacsall.out")
+  if (!file.exists(out_file)) return(NULL)
+  
+  tmp <- readLines(out_file)
+  
+  # Identify the summary block
+  st  <- grep("BMSY", tmp)[1]
+  end <- grep("Ofl", tmp) |> tail(1)
+  mgmt_block <- tmp[st:end]
+  
+  # Extract values based on targets
+  values <- lapply(names(mgmt_targets), function(target) {
+    line <- mgmt_block[grep(target, mgmt_block)][1]
+    if (is.na(line)) return(NA)
+    
+    # Split by one or more spaces
+    parts <- unlist(strsplit(trimws(line), " "))
+    idx   <- mgmt_targets[[target]]
+    return(as.numeric(parts[idx]))
+  })
+  
+  names(values) <- names(mgmt_targets)
+  return(dplyr::as_tibble(values) |> dplyr::mutate(Model = model_name))
 }
-sq_tk<-PlotTab[,c(3,9,6,4,5)]
-colnames(sq_tk)<-colnames(keep_out[,c(1:5)])
-man_tab<-round(keep_out[,c(1:5)],2)
-rownames(man_tab) = names(model_defs)
 
-kable(man_tab,split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{stepchange}Management quantities derived from maximum likelihood estimates by model using Tier 3 reference points. Reported natural mortality is for mature males, average recruitment is for males, and status and MMB were estimates for February 15 of the completed crab year.")
+# Iterate over all models and combine results
+ref_table <- names(model_defs) |> 
+  purrr::map_dfr(~extract_mgmt_quantities(model_defs[.x], .x)) |> 
+  dplyr::select(Model, everything()) # Reorder to put Model first
 
-
+# Render table
+kable(
+  ref_table, 
+  digits = 2,
+  split.cells = c(25, rep(12, ncol(ref_table) - 1)), 
+  justify = c("left", rep("center", ncol(ref_table) - 1)), 
+  caption = "\\label{stepchange}Management quantities derived from maximum likelihood estimates by model using Tier 3 reference points. Reported natural mortality is for mature males, average recruitment is for males, and status and MMB were estimates for February 15 of the completed crab year."
+)
 ```
 
 \newpage
@@ -675,159 +718,196 @@ kable(man_tab,split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),capt
 \newpage
 
 ```{r,echo=FALSE,warning=FALSE,message=F}
+# --- 1. Extract Weight and Results ---
+# Direct indexing instead of eval(parse)
+rep_obj     <- reslst$repsLst[[names(report_model)]]
+weight_data <- rep_obj$IndivWeightByXM
 
-tmp<-readLines(paste(model_defs[1],"/Gmacsall.out",sep=''))
-tmp2<-paste("reslst$repsLst$'",case_for_data_table,"'$IndivWeightByXM",sep='')
-input<-eval(parse(text=tmp2))
+# Extract weight-at-length vectors (assuming 22 size classes)
+male_wt   <- weight_data |> 
+  dplyr::filter(Sex == "male", Year == 1982, Maturity == 'mature') |> 
+  dplyr::select(matches("^[0-9]")) |> as.numeric()
 
-male_wt_len<-as.numeric(filter(input,Sex=="male"&Year=="1982"&Maturity=='mature')[,4:25])
-female_wt_len<-as.numeric(filter(input,Sex=="female"&Year=="1982"&Maturity=='mature')[,4:25])
+female_wt <- weight_data |> 
+  dplyr::filter(Sex == "female", Year == 1982, Maturity == 'mature') |> 
+  dplyr::select(matches("^[0-9]")) |> as.numeric()
 
-#==mature males
-st<-grep(c("N(males_mature): dataframe"),tmp,fixed=TRUE)
-tmp2<-tmp[st:(st+50)]
-tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
+# --- 2. Extract Population Numbers (N) ---
+# Helper to extract dataframe sections from Gmacsall.out without manual loops
+extract_gmacs_df <- function(lines, header) {
+  start <- grep(header, lines, fixed = TRUE) + 1
+  end   <- grep("EOD", lines[start:length(lines)])[1] + start - 2
+  read.table(text = lines[start:end])
+}
 
-N_males_mat<-NULL
-for(x in 1:length(tmp3))
-  N_males_mat<-rbind(N_males_mat,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+gmacs_lines <- readLines(file.path(report_model, "/Gmacsall.out"))
+n_males_mat <- extract_gmacs_df(gmacs_lines, "N(males_mature): dataframe")
+n_females_mat <- extract_gmacs_df(gmacs_lines, "N(females_mature): dataframe")
 
-#==mature females
-st<-grep(c("N(females_mature): dataframe"),tmp,fixed=TRUE)
-tmp2<-tmp[st:(st+50)]
-tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
+# --- 3. Extract Selectivity ---
+dfrSel <- wtsGMACS::extractRep1Results(reslst, "selfcns") |> 
+  dplyr::filter(type == "capture", fleet == "NMFS_Trawl_1989", 
+                case == report_model, sex == 'male', year == 2023)
 
-N_females_mat<-NULL
-for(x in 1:length(tmp3))
-  N_females_mat<-rbind(N_females_mat,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
+# Ensure selectivity vector length matches size classes (22)
+male_sel <- dfrSel |> 
+  dplyr::select(matches("^[0-9]")) |> as.numeric()
 
-dfrIndxFit = wtsGMACS::extractRep1Results(reslst,"Index_fit_summary") |> 
-  dplyr::mutate(
-    dplyr::across(c(year,obs,base_CV,actual_CV,q,prd,prsn_res),
-                  as.numeric)
+# --- 4. Define Size Filters ---
+# Logic for biomass/abundance tiers based on carapace width (CW)
+sizes <- seq(27.5, 132.5, 5)
+mask_95  <- ifelse(sizes >= 95, 1.0, 0.0)
+
+# User-specific logic for >105mm: 
+# Includes 50% of the 97.5 bin
+# Standardizing to the logic in your snippet:
+mask_101 <- dplyr::case_when(
+  sizes > 105  ~ 1.0,
+  sizes == 102.5 ~ 0.5, 
+  TRUE         ~ 0.0
+)
+
+
+midpoints <- seq(27.5, 132.5, by = 5)
+
+# --- 5. Vectorized Calculations ---
+# Convert N dataframes to matrices (excluding Year column)
+mat_males   <- as.matrix(n_males_mat[-1, -1])
+mat_females <- as.matrix(n_females_mat[-1, -1])
+
+# Calculate Biomass and Abundance (in 1,000 t or billions)
+results_tab <- data.frame(
+  Year = n_males_mat[-1, 1],
+  MMB_95   = (mat_males %*% (male_wt * male_sel * mask_95)) / 1e6,
+  MMB_101  = (mat_males %*% (male_wt * male_sel * mask_101)) / 1e6,
+  Abund_101 = (mat_males %*% (male_sel * mask_101)) / 1e3,
+  # Population (True Values)
+  FMB_tot      = (mat_females %*% female_wt) / 1e6,
+  MMB_tot      = (mat_males %*% male_wt) / 1e6,
+  MMB_95_tot   = (mat_males %*% (male_wt * mask_95)) / 1e6,
+  MMB_101_tot  = (mat_males %*% (male_wt * mask_101)) / 1e6,
+  Abund_101_tot = (mat_males %*% mask_101) / 1e3
+)
+
+survey_results <- data.frame(
+  # Predicted (Subject to Survey Selectivity)
+  Year      = wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |> 
+    filter(sex == 'female', case == names(report_model)) |> pull(year),
+  FMB      = wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |> 
+    filter(sex == 'female', case == names(report_model)) |> pull(prd),
+  MMB      = wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |> 
+    filter(sex == 'male', case == names(report_model)) |> pull(prd)
+)
+
+# --- 6. Final Table Formatting ---
+PlotTab <- survey_results |> 
+  full_join(results_tab) |> 
+  mutate(across(everything(), as.numeric)) |>
+  mutate(across(-Year, ~round(.x, 2))) %>%
+  select(Year, FMB, MMB, MMB_95, MMB_101, Abund_101, FMB_tot, MMB_tot, MMB_95_tot, MMB_101_tot, Abund_101_tot) %>%
+  arrange(Year)
+
+pander::pander(
+  PlotTab,
+  split.cells = 10,
+  split.table = Inf,
+  caption = "\\label{predsurvbio}Maximum likelihood estimates of mature male (MMB) and female (FMB) biomass. Columns 2-6 are subject to survey selectivity; columns 7-11 are population values."
+)
+
+```
+
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F}
+# --- 1. Extract Data Using Helper ---
+# We assume gmacs_lines was loaded in the previous chunk:
+# gmacs_lines <- readLines(file.path(model_defs[1], "Gmacsall.out"))
+n_males   <- extract_gmacs_df(gmacs_lines, "N(males): dataframe")
+n_females <- extract_gmacs_df(gmacs_lines, "N(females): dataframe")
+
+# --- 2. Vectorized Calculation ---
+# Convert to matrices and drop the first two metadata columns (Year, Season)
+mat_m <- as.matrix(n_males[-1, -1])
+mat_f <- as.matrix(n_females[-1, -1])
+
+# Calculate row sums for both matrices and convert to billions
+# (Assumes model units are in thousands)
+total_n_billions <- (rowSums(mat_m) + rowSums(mat_f)) / 1e6
+
+# --- 3. Final Table Assembly ---
+tmp_mat <- data.frame(
+  `Survey year`   = n_males[-1, 1],
+  `Total numbers` = round(total_n_billions, 2),
+  check.names     = FALSE
+)
+
+# --- 4. Render Table ---
+pander::pander(
+  tmp_mat,
+  split.cells = 10,
+  split.table = Inf,
+  caption = "\\label{predtotnum} Maximum likelihood estimates of total numbers of crab (billions), not subject to survey selectivity at the time of the survey."
+)
+
+```
+
+\newpage
+
+```{r,echo=FALSE,warning=FALSE,message=F}
+
+# --- 1. Extract Summary Data for all targeted cases ---
+# extractRep1Results returns a tidy dataframe containing 'case'
+summary_all <- wtsGMACS::extractRep1Results(reslst, "Summary") |> 
+  dplyr::filter(case %in% case_for_data_table) |> 
+  dplyr::select(case, year, SSB, rec_male) %>%
+  dplyr::mutate(year = as.numeric(year))
+
+# --- 2. Extract Fishing Mortality for all targeted cases ---
+# We loop through the case vector to pull the internal list objects
+fm_all <- case_for_data_table |> 
+  purrr::map_dfr(function(c_name) {
+    rep_obj <- reslst$repsLst[[c_name]]
+    
+    # Identify the correct dataframe name for this specific model
+    # Checks for "capture_rate" first, then "FM"
+    f_df_name <- intersect(names(rep_obj), 
+                           c("Fully-selected_capture_rate_by_season_sex_and_fishery", 
+                             "Fully-selected_FM_by_season_sex_and_fishery"))[1]
+    
+    if (is.na(f_df_name)) {
+      message("Warning: No F-mortality data found for case: ", c_name)
+      return(NULL)
+    }
+
+    rep_obj[[f_df_name]] |> 
+      dplyr::filter(sex == 'male', fleet == "Pot_Fishery") |> 
+      dplyr::transmute(
+        case = c_name,
+        year = as.numeric(year),
+        f_mort = as.numeric(`2`) # Directed fishing season
+      )
+  })
+
+# --- 3. Join and Format for Comparison ---
+# Use a join to ensure the FM and MMB align correctly for every model
+sum_mat <- summary_all |> 
+  dplyr::inner_join(fm_all, by = c("case", "year")) |> 
+  dplyr::transmute(
+    Model                 = case,
+    `Survey Year`         = year,
+    `Mature Male Biomass` = round(as.numeric(SSB), 2),
+    `Male Recruits`       = round(as.numeric(rec_male) / 1e6, 2), # Billions
+    `Fishing Mortality`   = round(f_mort, 2)
   ) |> 
-  dplyr::mutate(lba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2))),
-                uba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2)),lower.tail=FALSE));
-zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
-nZBs = length(zBs);
-dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |> 
-  dplyr::filter(type=="capture",
-                fleet %in% c("NMFS_Trawl_1982 ","NMFS_Trawl_1989")) |>
-  tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
-  dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
+  dplyr::arrange(Model, `Survey Year`)
 
-use_sel<-filter(dfrSel,year=="2023"&case==case_for_data_table&sex=='male')$est
-
-tFMB<-filter(dfrIndxFit,sex=='female',case==case_for_data_table)$prd
-#tFMB<-c(tFMB[1:38],0,tFMB[39:length(tFMB)])
-
-tMMB<-filter(dfrIndxFit,sex=='male',case==case_for_data_table)$prd
-#tMMB<-c(tMMB[1:38],0,tMMB[39:length(tMMB)]) 
-
-males_bio_size<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,male_wt_len,FUN='*')
-males_95_bio_size<-males_bio_size[,15:ncol(males_bio_size)]
-males_101_bio_size<-males_bio_size[,16:ncol(males_bio_size)]
-males_101_bio_size[,1]<-males_101_bio_size[,1]*.5
-
-males_n_size_sel<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,use_sel,FUN='*')
-males_bio_size_sel<-sweep(males_n_size_sel,2,male_wt_len,FUN='*')
-males_95_bio_size_sel<-males_bio_size_sel[,15:ncol(males_bio_size_sel)]
-males_101_bio_size_sel<-males_bio_size_sel[,16:ncol(males_bio_size_sel)]
-males_101_bio_size_sel[,1]<-males_101_bio_size_sel[,1]*.5
-
-tot_95_bio<-apply(males_95_bio_size,1,sum)/1000000
-tot_101_bio<-apply(males_101_bio_size,1,sum)/1000000
-sel_95_bio<-apply(males_95_bio_size_sel,1,sum)/1000000
-sel_101_bio<-apply(males_101_bio_size_sel,1,sum)/1000000
-
-males_n_size_sel<-sweep(N_males_mat[,3:ncol(N_males_mat)],2,use_sel,FUN='*')
-males_101_n_size_sel<-males_n_size_sel[,16:ncol(males_n_size_sel)]
-males_101_n_size_sel[,1]<-males_101_n_size_sel[,1]*.5
-
-males_n_size_tot<-N_males_mat[,3:ncol(N_males_mat)]
-males_101_n_size_tot<-males_n_size_tot[,16:ncol(males_n_size_tot)]
-males_101_n_size_tot[,1]<-males_n_size_tot[,1]*.5
-
-tot_101_abn<-apply(males_101_n_size_tot,1,sum)/1000
-sel_101_abn<-apply(males_101_n_size_sel,1,sum)/1000
-
-tmp_mat2<-data.frame(year=N_females_mat[,1],
-                     FMB=tFMB,
-                     MMB=tMMB,
-                     MMB_95=sel_95_bio,
-                     MMB_101=sel_101_bio,
-                     abund_101=sel_101_abn,
-                     FMB_tot=apply(sweep(N_females_mat[,3:ncol(N_females_mat)],2,female_wt_len,FUN='*'),1,sum)/1000000 ,
-                     MMB_tot=apply(sweep(N_males_mat[,3:ncol(N_females_mat)],2,male_wt_len,FUN='*'),1,sum)/1000000,
-                     MMB_95_tot=tot_95_bio,
-                     MMB_101_tot=tot_101_bio,
-                     abund_101_tot=tot_101_abn)
-
-write.csv(round(tmp_mat2,2),'for_ben.csv')
-
-PlotTab<- data.frame(round(tmp_mat2,2))
-colnames(PlotTab)<- c("Survey year","FMB","MMB","MMB_95","MMB_101","Abund_101","FMB_tot",
-                      "MMB_tot","MMB_95_tot","MMB_101_tot","abund_95_tot")
-
-#write.csv(PlotTab,"model_est.csv")
-
-rownames(PlotTab)<- NULL
-pander(PlotTab,split.cells=10,split.table=Inf,caption="\\label{predsurvbio}Maximum likelihood estimates of morphometrically mature male biomass (MMB), mature female biomass (FMB). Columns 2-6 are subject to survey selectivity; columns 7-11 are the population values. ")
-
-```
-
-
-\newpage
-
-```{r,echo=FALSE,warning=FALSE,message=F}
-
-#==tot males#==tot malesWeight
-tmp<-readLines(paste(model_defs[1],"/Gmacsall.out",sep=''))
-st<-grep(c("N(males): dataframe"),tmp,fixed=TRUE)
-tmp2<-tmp[st:(st+50)]
-tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
-
-N_males<-NULL
-for(x in 1:length(tmp3))
-  N_males<-rbind(N_males,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
-
-#==tot_females    
-st<-grep(c("N(females): dataframe"),tmp,fixed=TRUE)
-tmp2<-tmp[st:(st+50)]
-tmp3<-tmp2[grep("1982",tmp2)[1]:(grep("EOD",tmp2)-1)]
-N_females<-NULL
-for(x in 1:length(tmp3))
-  N_females<-rbind(N_females,as.numeric(unlist(strsplit(tmp3[x],split=" "))))
-
-tmp_mat<-data.frame(year=N_females[,1],
-                    tot_n=apply(N_males[,3:ncol(N_males)]+N_females[,3:ncol(N_females)],1,sum)/1000000)
-
-colnames(tmp_mat)<- c("Survey year","Total numbers")
-pander(tmp_mat,split.cells=10,split.table=Inf,caption="\\label{predtotnum} Maximum likelihood estimates of total numbers of crab (billions), not subject to survey selectivity at the time of the survey. ")
-
-```
-
-\newpage
-
-```{r,echo=FALSE,warning=FALSE,message=F}
-
-dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
-  dplyr::select(case,year,SSB,rec_male,)
-dfrr<-filter(dfr,case==case_for_data_table)
-
-tmp2<-paste("reslst$repsLst$'",case_for_data_table,"'$'Fully-selected_FM_by_season_sex_and_fishery'",sep='')
-input<-eval(parse(text=tmp2))
-in_f<-as.numeric(filter(input,sex=='male'&fleet=="Pot_Fishery")$'2')
-
-tmp_mat<-data.frame(year=dfrr$year,
-                    mmb=round(as.numeric(dfrr$SSB),2),
-                    recruits=round(as.numeric(dfrr$rec_male)/1000000,2),
-                    f_mort=round(in_f,2))
-
-colnames(tmp_mat)<- c("Survey year","Mature male biomass","Male recruits","Fishing mortality")
-
-rownames(tmp_mat)<- NULL
-pander(tmp_mat,split.cells=10,caption="\\label{predsurvbio_tot} Maximum likelihood estimates of large mature male biomass at mating, male recruitment (billions), and fully-selected total fishing mortaltiy. ")
+# --- 4. Render Table ---
+pander::pander(
+  sum_mat,
+  split.cells = 10,
+  caption = "\\label{predsurvbio_tot} Comparison of mature male biomass (MMB) at mating, male recruitment (billions), and fully-selected fishing mortality ($F$) across selected models."
+)
 
 ```
 
@@ -861,32 +941,76 @@ pander(tmp_mat,split.cells=10,caption="\\label{predsurvbio_tot} Maximum likeliho
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.width=8.5,fig.height=8,fig.cap="\\label{mmbfits}Model fits to the observed mature biomass at survey."}
 
-
-##--index catch data----
-dfrIndxFit = wtsGMACS::extractRep1Results(reslst,"Index_fit_summary") |> 
+# --- 1. Process Prediction Data and Add Hybrid Status ---
+dfrIndxFit_plot <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |> 
+  dplyr::filter(case != "25.1 gmacs") %>%
   dplyr::mutate(
-    dplyr::across(c(year,obs,base_CV,actual_CV,q,prd,prsn_res),
-                  as.numeric)
+    across(c(year, obs, base_CV, actual_CV, q, prd, prsn_res), as.numeric)
   ) |> 
-  dplyr::mutate(lba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2))),
-                uba=qlnorm(0.05,log(obs),sqrt(log(1+actual_CV^2)),lower.tail=FALSE));
+  dplyr::rename(
+    predicted = prd,
+    residuals = prsn_res,
+    model     = case
+  ) |> 
+  dplyr::mutate(
+    # Categorize models into Hybrid vs Standard based on name
+    hybrid_status = ifelse(grepl("hyb_surv|hyb_both", model, ignore.case = TRUE), 
+                           "Hybrid Included", 
+                           "Standard Survey"),
+    # Confidence interval calculations
+    sd_log = sqrt(log(1 + actual_CV^2)),
+    lba    = qlnorm(0.05, log(obs), sd_log),
+    uba    = qlnorm(0.95, log(obs), sd_log)
+  )
 
+# --- 2. Extract Unique Observations ---
+# This ensures we only plot a single set of points and black error bars
+dfrObs <- dfrIndxFit_plot |> 
+  dplyr::distinct(year, sex, hybrid_status, obs, lba, uba)
 
-colnames(dfrIndxFit)[c(13,14,15)]<-c('predicted','residuals','model')
+# --- 3. Generate the 4-Panel Plot ---
+p_idx_final <- ggplot() +
+  # Model Predictions (Colored lines, plotted first so they sit behind points)
+  geom_line(
+    data = dfrIndxFit_plot, 
+    aes(x = year, y = predicted, colour = model), 
+    lwd = 0.9, 
+    alpha = 0.8
+  ) +
+  # Observations (Single black error bar per year/sex/panel)
+  geom_errorbar(
+    data = dfrObs,
+    aes(x = year, ymin = lba, ymax = uba), 
+    width = 0.3, 
+    color = "black",
+    alpha = 0.6
+  ) +
+  # Observations (Single black point per year/sex/panel)
+  geom_point(
+    data = dfrObs,
+    aes(x = year, y = obs), 
+    size = 1.2,
+    color = "black"
+  ) +
+  # Formatting and Scales
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
+  labs(
+    x = "Year", 
+    y = "NMFS Survey Biomass (1,000 t)",
+    colour = "Model Prediction",
+    subtitle = "Points/Bars: Shared Observations | Lines: Model Fits",
+    caption = "Error bars represent 95% log-normal confidence intervals on observations."
+  ) +
+  facet_grid(sex ~ hybrid_status, scales = "free_y") + 
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 8),
+    strip.background = element_rect(fill = "white"),
+    panel.spacing = unit(1, "lines")
+  )
 
-##--go back to this when data consistent across models?----
-p = ggplot(dfrIndxFit,aes(x=year,colour=model)) +
-  geom_point(aes(y=obs),position = position_dodge(width = 1)) +
-  geom_line(aes(y=predicted),lwd=1.1) +
-  geom_errorbar(aes(x=year,ymin = lba, ymax = uba), width = 0.2,col='black') +
-  scale_y_continuous(limits=c(0,NA)) +
-  labs(y="NMFS Survey Biomass  (1,000's t)") +
-  facet_wrap(~sex,ncol=1,scales="free_y")  +theme_bw()
-print(p)
-
-
-
-
+print(p_idx_final)
 
 ```
 
@@ -908,7 +1032,6 @@ ggplot(dfrMnGr)+
   theme_bw()
 
 #==add data
-
 ```
 
 
@@ -917,27 +1040,74 @@ ggplot(dfrMnGr)+
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.width=8,fig.height=8,fig.cap="\\label{catchfits}Model fits to catch data."}
 
-dfrCatFit = wtsGMACS::extractRep1Results(reslst,"Catch_fit_summary") |> 
+# --- 1. Process Catch Fit Data and Add Hybrid Status ---
+dfrCatFit_plot <- wtsGMACS::extractRep1Results(reslst, "Catch_fit_summary") |> 
   dplyr::mutate(
-    dplyr::across(c(year,obs,cv,effort,HM,prd,rsd),
-                  as.numeric)
-  );
+    # Ensure numeric types
+    across(c(year, obs, cv, effort, HM, prd, rsd), as.numeric)
+  ) |> 
+  dplyr::rename(
+    predicted = prd,
+    residuals = rsd,
+    model     = case
+  ) |> 
+  dplyr::mutate(
+    # Identify if a model includes hybrid discards based on its name
+    hybrid_status = ifelse(grepl("hyb_both|hyb_fishery", model, ignore.case = TRUE), 
+                           "Hybrid Included", 
+                           "Standard Data"),
+    # Create descriptive row labels for faceting
+    series = dplyr::case_when(
+      fleet == "Trawl_Bycatch" ~ "Non-directed Bycatch",
+      type == "retained" ~ "Directed Retained (Male)",
+      type == "discard" & sex == "male"   ~ "Directed Discard (Male)",
+      type == "discard" & sex == "female" ~ "Directed Discard (Female)",
+      TRUE ~ paste(fleet, type, sex)
+    )
+  )
 
+# --- 2. Extract Unique Observations ---
+# This ensures that for models sharing the same data, only one point is plotted
+dfrObs <- dfrCatFit_plot |> 
+  dplyr::distinct(year, series, hybrid_status, obs)
 
-colnames(dfrCatFit)[c(13,14,15)]<-c('predicted','residuals','model')
-plot_dat<-dfrCatFit
+# --- 3. Generate the 2-Column Comparison Plot ---
+p_catch <- ggplot() +
+  # 1. Model Predictions (Lines)
+  geom_line(
+    data = dfrCatFit_plot, 
+    aes(x = year, y = predicted, colour = model), 
+    lwd = 0.8, 
+    alpha = 0.8
+  ) +
+  # 2. Observations (Points)
+  geom_point(
+    data = dfrObs,
+    aes(x = year, y = obs), 
+    size = 1.2,
+    color = "black"
+  ) +
+  # 3. Formatting and Scales
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
+  labs(
+    x = "Year", 
+    y = "Catch (1,000 t)",
+    colour = "Model Scenario",
+    title = "Fishery Catch and Bycatch Fits",
+    subtitle = "Black points: Observations | Colored lines: Model predictions",
+    caption = "Observations in the 'Hybrid Included' column contain hybrid crab discards."
+  ) +
+  # Grid: Series (Rows) x Hybrid Status (Columns)
+  facet_grid(series ~ hybrid_status, scales = "free_y") + 
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    strip.text.y = element_text(size = 8, angle = 0), # Keep labels readable
+    strip.background = element_rect(fill = "white"),
+    panel.spacing = unit(1, "lines")
+  )
 
-##--catch data----
-levels(plot_dat$sex)[1]<-"Non-directed bycatch"
-
-p = ggplot(plot_dat,aes(x=year,colour=model)) + 
-  geom_point(aes(y=obs)) + 
-  geom_line(aes(y=predicted)) + 
-  scale_y_continuous(limits=c(0,NA)) + 
-  labs(y="Catch (1,000's t)") + 
-  facet_wrap(sex~type,ncol=1,scales="free_y")  +theme_bw()
-
-print(p)
+print(p_catch)
 
 ```
 
@@ -1173,14 +1343,69 @@ print(p)
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{predfmort}Estimated fishing mortalities for the directed and non-directed fisheries."}
 
-tmp<-data.frame(wtsGMACS::extractRep1Results(reslst,"Fully-selected_FM_by_season_sex_and_fishery"))
-colnames(tmp)<-c("Sex","Fleet","Year","s1","s2","s3","Model")
-levels(tmp$Fleet)[2]<-"Non-directed bycatch"
-ggplot(data = filter(tmp,Fleet%in%c("Pot_Fishery","Non-directed bycatch"))) + 
-  geom_line(aes(x=as.numeric(Year), y=as.numeric(s2),col=Model,group=Model),lwd=1.25,alpha=.6)+ 
-  facet_grid(Fleet ~ Sex,scale='free_y') + 
-  theme_bw()+
-  theme(legend.position=c(.2,.8))
+# --- 1. Robust Data Extraction across Models ---
+# We loop through all models in reslst to find the correctly named F-dataframe
+dfrF_plot <- names(reslst$repsLst) |> 
+  purrr::map_dfr(function(c_name) {
+    rep_obj <- reslst$repsLst[[c_name]]
+    
+    # Identify which name this specific model run used
+    f_df_name <- intersect(
+      names(rep_obj), 
+      c("Fully-selected_capture_rate_by_season_sex_and_fishery", 
+        "Fully-selected_FM_by_season_sex_and_fishery")
+    )[1]
+    
+    if (is.na(f_df_name)) return(NULL)
+    
+    # Extract and clean
+    rep_obj[[f_df_name]] |> 
+      dplyr::mutate(
+        Model = c_name,
+        # Ensure consistency across versions (some use 'year', others 'Year')
+        Year = as.numeric(year)
+      )
+  })
+
+# --- 2. Clean and Filter Data for Plotting ---
+plot_dat <- dfrF_plot |> 
+  dplyr::mutate(
+    # Rename fleets for the report
+    Fleet = dplyr::case_when(
+      fleet == "Pot_Fishery" ~ "Directed Pot Fishery",
+      fleet == "Trawl_Bycatch" ~ "Non-directed Bycatch",
+      TRUE ~ fleet
+    ),
+    # Capitalize sex for headers
+    Sex = stringr::str_to_title(sex),
+    # Ensure mortality values are numeric (assuming season 2 is the primary fishery)
+    F_value = as.numeric(`2`) 
+  ) |> 
+  # Filter only for the primary fishing fleets
+  dplyr::filter(Fleet %in% c("Directed Pot Fishery", "Non-directed Bycatch"))
+
+# --- 3. Generate the Comparison Plot ---
+p_f_mort <- ggplot(plot_dat, aes(x = Year, y = F_value, color = Model, group = Model)) +
+  # Model estimates
+  geom_line(lwd = 1.1, alpha = 0.7) +
+  # Layout and Scales
+  facet_grid(Fleet ~ Sex, scales = "free_y") +
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
+  theme_bw() +
+  labs(
+    title = "Estimated Fully-Selected Fishing Mortality",
+    subtitle = "Calculated for the primary fishing season (Season 2)",
+    x = "Year",
+    y = "Fishing Mortality (F)",
+    color = "Model Scenario"
+  ) +
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "white"),
+    panel.spacing = unit(1, "lines")
+  )
+
+print(p_f_mort)
 
 ```
 
@@ -1188,39 +1413,64 @@ ggplot(data = filter(tmp,Fleet%in%c("Pot_Fishery","Non-directed bycatch"))) +
 \newpage
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{predmat}Estimated (black line) or specified (colored lines) probability(s) of maturing for male crab."}
+# --- 1. Extract and Process Maturity Data ---
+# case_for_data_table can be a single string or a vector of strings
+plotdat_all <- case_for_data_table %>%
+    purrr::map_dfr(function(case_name) {
+        # Access the output list directly
+        dat <- reslst$outsLst[[case_name]]$mature_probability
+        
+        if (is.null(dat)) {
+            message("Warning: No mature_probability data for ", case_name)
+            return(NULL)
+        }
+        
+        # Pivot from wide to long format
+        dat %>%
+            tidyr::pivot_longer(
+                cols = -c(Sex, Year), 
+                names_to = "width", 
+                values_to = "prob"
+            ) %>%
+            dplyr::mutate(
+                Model = case_name,
+                # Logic to separate models with "newmat"
+                Maturity_Source = ifelse(grepl("newmat", case_name, ignore.case = TRUE), 
+                                         "New Maturity Data (newmat)", 
+                                         "Standard Maturity Data"),
+                width = as.numeric(as.character(width)),
+                prob = as.numeric(prob),
+                # Ensure Year is a factor for discrete coloring if desired, 
+                # or keep numeric for a gradient
+                Year_Fact = as.factor(Year)
+            )
+    })
 
-tmp2<-paste("reslst$outsLst$'",case_for_data_table,"'$mature_probability",sep='')
-tmp3<-paste("reslst$outsLst$'","25.1 gmacs (up + mature)","'$mature_probability",sep='')
-tmp<-eval(parse(text=tmp2))
-tm<-eval(parse(text=tmp3))
+# --- 2. Generate the Split Plot ---
+p_molt <- ggplot(plotdat_all, aes(x = width, y = prob)) +
+    # Use group to ensure lines are drawn per Year/Model combination
+    geom_line(aes(col = Year_Fact, group = interaction(Year, Model)), 
+              lwd = 1.1, alpha = 0.7) +
+    # Force y-axis from 0 to 1
+    scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
+    theme_bw() +
+    labs(
+        x = "Carapace Width (mm)", 
+        y = "Probability of Terminal Molt",
+        col = "Year",
+        title = "Probability of Maturing / Terminal Molt",
+        subtitle = "Separated by Maturity Data Specification"
+    ) +
+    # Facet rows by Data Source (Standard vs Newmat) and columns by Sex
+    facet_grid(Maturity_Source ~ Sex) + 
+    theme(
+        legend.position = "bottom",
+        strip.background = element_rect(fill = "white"),
+        panel.spacing = unit(1, "lines")
+    )
 
-plotdat<-melt(tmp,id.vars=c("Sex","Year"))
-colnames(plotdat)[3:4]<-c("width","prob")
-plotdat[,3]<-as.numeric(as.character(plotdat[,3]))
-plotdat[,4]<-as.numeric(plotdat[,4])
-p <- ggplot() +
-  expand_limits(y = c(0, 1)) +
-  labs(x = "Carapace width (mm)", y ="Probability of terminal molt")+ 
-  geom_line(data=plotdat, aes(x = width, y = prob,col = Year,group=Year),lwd=1.15,alpha=.8)+
-  guides(linetype='none')+
-  theme_bw()+theme(legend.position='none')+
-  facet_wrap(~Sex)
-
-
-plotdat<-melt(tm,id.vars=c("Sex","Year"))
-colnames(plotdat)[3:4]<-c("width","prob")
-plotdat[,3]<-as.numeric(as.character(plotdat[,3]))
-plotdat[,4]<-as.numeric(plotdat[,4])
-q <- ggplot() +
-  expand_limits(y = c(0, 1)) +
-  labs(x = "Carapace width (mm)", y ="Probability of terminal molt")+ 
-  geom_line(data=plotdat, aes(x = width, y = prob,col = Year,group=Year),lwd=1.15,alpha=.8)+
-  guides(linetype='none')+
-  theme_bw()+theme(legend.position='bottom')+
-  facet_wrap(~Sex)
-
-p/q
-
+# Render the plot
+print(p_molt)
 
 ```
 
@@ -1257,29 +1507,55 @@ ggplot(plot_dat)+
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=8,fig.cap="\\label{nat_m}Estimated natural mortality by sex and maturity state. Natural mortality in all years previous to 2018 and after 2019 are equal to the estimated M in 2017. "}
 
-dfrMbyXM = wtsGMACS::extractRep1Results(reslst,"Natural_mortality-by-class") |> 
-  tidyr::pivot_longer(cols=!c(case,year,sex,maturity),
-                      names_to="size",values_to="est") |> 
-  dplyr::mutate(dplyr::across(c(year,size,est),as.numeric)) |> 
-  dplyr::mutate(xm=paste(maturity,sex)) |> 
-  dplyr::group_by(case,xm,sex,maturity,year) |> 
-  dplyr::ungroup();
-new_m<- filter(dfrMbyXM,size==27.5)
 
-colnames(new_m)[c(1,2,4,6)]<-c("Year","Sex","Model","M")
+# --- 1. Extract and Process Natural Mortality Data ---
+dfrMbyXM_plot <- wtsGMACS::extractRep1Results(reslst, "Natural_mortality-by-class") |> 
+  tidyr::pivot_longer(
+    cols = -c(case, year, sex, maturity),
+    names_to = "size", 
+    values_to = "M_value"
+  ) |> 
+  dplyr::mutate(
+    year = as.numeric(year),
+    size = as.numeric(size),
+    M_value = as.numeric(M_value)
+  ) |> 
+  # Filter for selected models and the base size class
+  # (M is typically constant across sizes in these models)
+  dplyr::filter(size == 27.5) |> 
+  dplyr::mutate(
+    # Clean up labels for the report
+    Sex = stringr::str_to_title(sex),
+    Maturity = stringr::str_to_title(maturity),
+    Model = case
+  )
 
-plot_dat<-new_m[,c(4,1,2,6,3)]
-plot_dat$maturity[plot_dat$maturity=='immature']<-"Immature"  
-plot_dat$maturity[plot_dat$maturity=='mature']<-"Mature"    
-ggplot(plot_dat, aes(x = Year, y = M, colour = Model))+
-  geom_line(lwd=1.15,alpha=.8)+
-  geom_point(size=2)+
-  facet_wrap(~Sex+maturity)+
-  theme_bw()+theme(legend.position=c(.8,.8))+
-  xlim(2015,2022)+expand_limits(y=0)+
-  ylim(0,5)
+# --- 2. Generate the Comparison Plot ---
+p_nat_m <- ggplot(dfrMbyXM_plot, aes(x = year, y = M_value, color = Model, group = Model)) +
+  # Model Estimates
+  geom_line(lwd = 1.1, alpha = 0.7) +
+  geom_point(size = 2, alpha = 0.8) +
+  # Focus on the 2018-2019 mortality event window
+  coord_cartesian(xlim = c(2015, 2022), ylim = c(0, 5)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  theme_bw() +
+  labs(
+    title = "Estimated Natural Mortality (M)",
+    subtitle = "Focusing on 2018-2019 Mortality Events",
+    x = "Year",
+    y = "Natural Mortality (M)",
+    color = "Model Scenario"
+  ) +
+  # 2x2 grid by Sex and Maturity
+  facet_wrap(~Sex + Maturity) +
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "white"),
+    panel.spacing = unit(1, "lines")
+  )
 
-
+# Render the plot
+print(p_nat_m)
 
 
 
