@@ -6,7 +6,7 @@ library(dplyr)
 library(tidyr)
 
 # --- 1. Setup Environment ----
-use_cores <- parallel::detectCores() - 2
+use_cores <- 2
 cl <- parallel::makeCluster(use_cores)
 doParallel::registerDoParallel(cl)
 
@@ -21,7 +21,7 @@ orig_wd <- getwd()
 
 
 # --- 2. Jittering Execution ----
-for(d in seq_along(orig_drv)) {
+for(d in 1:length(orig_drv)) {
   current_scenario <- orig_drv[d]
   jitter_root <- file.path(current_scenario, "jitter")
   
@@ -30,12 +30,13 @@ for(d in seq_along(orig_drv)) {
   message("Starting jitter for: ", current_scenario)
   
   # Parallel loop for iterations
-  foreach(i = 1:tot_it, .packages = NULL) %dopar% {
+  for(i in 1:tot_it){
     work_dir <- file.path(jitter_root, as.character(i))
     if (!dir.exists(work_dir)) dir.create(work_dir)
-    
+    print(i)
     # Define files to copy
     dat_name <- paste0(gsub("gmacs", "snow", current_scenario), ".dat")
+    if(file.exists(file.path(work_dir, "Gmacsall.out"))) next # Skip iteration if already done
     
     files_to_copy <- c(
       file.path(current_scenario, dat_name),
@@ -54,11 +55,11 @@ for(d in seq_along(orig_drv)) {
     jitter_idx <- grep("Jitter", in_proj)
     if(length(jitter_idx) > 0) in_proj[jitter_idx + 1] <- "1 0 0.1"
     writeLines(in_proj, gmacs_dat_path)
-
+    
     # Run assessment using shell/system call
     # Using 'shell' on Windows or 'system' on Unix; cd into dir first
-    cmd <- paste0("cmd /c \"cd /d ", work_dir, " && gmacs.exe\"")
-    system(cmd, show.output.on.console = FALSE)
+    cmd <- paste0("cmd /c \"cd /d ", work_dir, " && gmacs -nohess -verbose 0 -nox\"")
+    system(cmd, show.output.on.console = TRUE)
   }
 }
 
@@ -75,7 +76,11 @@ extract_jitter_results <- function(scenario_path, n_iterations) {
     out_file <- file.path(scenario_path, "jitter", i, "Gmacsall.out")
     
     if (file.exists(out_file)) {
-      tmp <- readLines(out_file)
+      tmp <- try(readLines(out_file), silent = TRUE)
+      
+      if (inherits(tmp, "try-error")) {
+        next
+      }
       
       # Extract Neg Log Likelihood (Total)
       nll_line <- tmp[grep("Total", tmp)[1]]
@@ -97,10 +102,10 @@ extract_jitter_results <- function(scenario_path, n_iterations) {
         jitter     = i,
         negloglike = nll_val,
         BMSY       = parse_gmacs_line(use, "BMSY", 3),
-        Status     = parse_gmacs_line(use, "Status", 3),
-        OFL        = parse_gmacs_line(use, "OFL", 4), # Directed OFL
-        FMSY       = parse_gmacs_line(use, "FMSY", 3),
-        FOFL       = parse_gmacs_line(use, "FOFL", 4)
+        Status     = parse_gmacs_line(use, "Bcurr/BMSY", 3),
+        OFL        = parse_gmacs_line(use, "OFL", 3), # Directed OFL
+        FMSY       = parse_gmacs_line(use, "Fmsy", 4),
+        FOFL       = parse_gmacs_line(use, "Fofl", 4)
       )
     }
   }
@@ -108,7 +113,7 @@ extract_jitter_results <- function(scenario_path, n_iterations) {
 }
 
 # Run extraction for all scenarios
-jit_summary <- bind_rows(lapply(orig_drv, extract_jitter_results, n_iterations = tot_it))
+jit_summary <- bind_rows(lapply(orig_drv[1], extract_jitter_results, n_iterations = tot_it))
 
 
 # --- 4. Plotting ----
