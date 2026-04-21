@@ -6,9 +6,9 @@ library(dplyr)
 library(tidyr)
 
 # --- 1. Setup Environment ----
-use_cores <- 2
-# cl <- parallel::makeCluster(use_cores)
-# doParallel::registerDoParallel(cl)
+use_cores <- 6
+cl <- parallel::makeCluster(use_cores)
+doParallel::registerDoParallel(cl)
 
 # Define scenarios (using your requested snow/gmacs replacement logic)
 orig_drv <- c("25_gmacs_update_hyb_surv_and_fsh_newmat", 
@@ -30,8 +30,8 @@ for(d in 1:length(orig_drv)) {
   message("Starting jitter for: ", current_scenario)
   
   # Parallel loop for iterations
-  # foreach(i = 1:tot_it) %dopar% {
-  for(i in 1:tot_it){
+  foreach(i = 1:tot_it) %dopar% {
+  # for(i in 1:tot_it){
     work_dir <- file.path(jitter_root, as.character(i))
     if (!dir.exists(work_dir)) dir.create(work_dir)
     print(i)
@@ -59,15 +59,16 @@ for(d in 1:length(orig_drv)) {
     
     # Run assessment using shell/system call
     # Using 'shell' on Windows or 'system' on Unix; cd into dir first
-    cmd <- paste0("cmd /c \"cd /d ", work_dir, " && gmacs -nohess -verbose 0 -nox > gmacs_log.txt 2>&1\"")
-    system(cmd, show.output.on.console = FALSE)
+    gc()
+    args <- c("/c", paste0("cd /d ", work_dir, " && gmacs -nohess -verbose 0 -nox > gmacs_log.txt 2>&1"))
+    system2("cmd", args = args, wait = TRUE)
     gc()
   }
 }
 
 # Clean up cluster
-# parallel::stopCluster(cl)
-# closeAllConnections()
+parallel::stopCluster(cl)
+closeAllConnections()
 
 
 # --- 3. Extract Results ---

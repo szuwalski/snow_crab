@@ -91,30 +91,44 @@ case_for_resids     <- "25.1 gmacs" # model print size comp residuals for
 case_for_data_table <- c("25.1 gmacs", "25.1 gmacs (update + hyb_fishery)")
 report_model <- model_defs[1]
 
-```
-
-\newpage
-
-```{r,echo=F,message=FALSE,warning=F,include=FALSE}
-
 
 # Global Switches
 do_size_comps  <- 1 # Set to 1 to regenerate PNGs (can take time)
 do_proj        <- 0 # Set to 1 to process projection files
 make_proj_fig  <- 0 # Set to 1 to generate projection plots
 
-if(do_size_comps==1)
-{
+```
+
+\newpage
+
+```{r,echo=F,message=FALSE,warning=F,include=FALSE}
+
+if(do_size_comps==1){
   # Extract results using Buck's package tools
   dfrZCs <- wtsGMACS::extractRep1Results(reslst, "Size_fit_summary") |> 
     dplyr::mutate(across(c(year, size, inpSS, inpN, aggObs, aggPrd, aggRes), as.numeric))
   
-  # Plotting Logic
-  unique_comps <- dfrZCs |> distinct(origID, aggID, fleet, comp_type, sex, maturity, shell_cond, case) # Grant: case, may not be needed...
+  # 2. Assign models to Groups
+  dfrZCs <- dfrZCs |> 
+    dplyr::mutate(
+      fleet = dplyr::case_when(
+        grepl("compfix", case, ignore.case = TRUE) & fleet == "Pot_Fishery" ~ "Pot_fishery_compfix",
+        grepl("plus group", case, ignore.case = TRUE) & fleet == "Pot_Fishery" ~ "Pot_fishery_plus_group",
+        (grepl("hyb_fishery", case, ignore.case = TRUE) | grepl("hyb_both", case, ignore.case = TRUE)) & fleet == "Pot_Fishery" ~ "Pot_fishery_hybrid",
+        (grepl("hyb_surv", case, ignore.case = TRUE) | grepl("hyb_both", case, ignore.case = TRUE)) & fleet == "NMFS_Trawl_1982" ~ "NMFS_Trawl_1982_hybrid",
+        (grepl("hyb_surv", case, ignore.case = TRUE) | grepl("hyb_both", case, ignore.case = TRUE)) & fleet == "NMFS_Trawl_1989" ~ "NMFS_Trawl_1989_hybrid",
+        .default = fleet
+      )
+    ) |>
+    dplyr::group_by(fleet, comp_type, sex, maturity) |>
+    mutate(comp_id = cur_group_id())
   
-  for (i in seq_along(unique(unique_comps$origID))) {
-    curr_id <- as.numeric(unique_comps$origID[i])
-    tmp     <- dfrZCs |> filter(origID == curr_id)
+  # Plotting Logic
+  unique_comps <- dfrZCs |> distinct(comp_id, aggID, fleet, comp_type, sex, maturity, shell_cond, case) # Grant: case, may not be needed...
+  
+  for (i in seq_along(unique(unique_comps$comp_id))) { # Loop around comp data types
+    curr_id <- i
+    tmp     <- dfrZCs |> filter(comp_id == curr_id)
     
     # Size Composition Plot
     p <- ggplot(tmp) +
@@ -125,7 +139,8 @@ if(do_size_comps==1)
       labs(x = "Carapace width (mm)", y = "Proportion", 
            title = paste(tmp$fleet[1], tmp$sex[1], tmp$comp_type[1], tmp$maturity[1], sep = " / "))
     
-    ggsave(paste0("plots/size_comp_", curr_id, ".png"), p, height = 8, width = 8, dpi = 300)
+    compname <- paste(tmp$fleet[1], tmp$sex[1], tmp$comp_type[1], tmp$maturity[1], sep = "_")
+    ggsave(paste0("plots/size_comp_plot_",  curr_id, "_", compname, ".png"), p, height = 8, width = 8, dpi = 300)
     
     # Residual Plot for specific case
     res_data <- tmp |> 
@@ -137,9 +152,10 @@ if(do_size_comps==1)
       theme_bw() +
       labs(x = "Year", y = "Carapace width (mm)", col = "Residual direction", size = "Raw residual size")
     
-    ggsave(paste0("plots/size_comp_resid_", curr_id, ".png"), p_res, height = 10, width = 8, dpi = 300)
+    ggsave(paste("plots/size_comp_resid_", curr_id, "_", compname,".png"), p_res, height = 10, width = 8, dpi = 300)
   }
 }
+
 
 
 
@@ -157,8 +173,6 @@ if(do_size_comps==1)
 
 # BE SURE TO CHANGE THE F IN THE PROJ FILE TO THE FOFL
 proj_dir<-paste0(dirname(getwd()), "/snow_crab/25_gmacs/")
-
-do_proj<-0
 
 if(do_proj==1)
 {
@@ -879,7 +893,7 @@ fm_all <- case_for_data_table |>
       message("Warning: No F-mortality data found for case: ", c_name)
       return(NULL)
     }
-
+    
     rep_obj[[f_df_name]] |> 
       dplyr::filter(sex == 'male', fleet == "Pot_Fishery") |> 
       dplyr::transmute(
@@ -1115,111 +1129,26 @@ print(p_catch)
 
 
 
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{size_comp_1}Model fits (lines) to the retained catch size composition data (grey bars)."}
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%"}
 
-include_graphics("plots/size_comp_1.png")
+# 1. Get a list of all comp plots in the directory
+img_folder <- "plots"
+img_files <- list.files(path = img_folder, pattern = "size_comp_plot", full.names = TRUE)
 
-
-```
-
-\newpage
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{size_comp_2}Model fits (lines) to the total catch size composition data (grey bars)."}
-
-include_graphics("plots/size_comp_2.png")
-
-
-```
-
-\newpage
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{size_comp_3}Model fits (lines) to the female discard size composition data (grey bars)."}
-
-include_graphics("plots/size_comp_3.png")
-
-```
-
-\newpage
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{size_comp_4}Model fits (lines) to the male non-directed fishery size composition data (grey bars)."}
-
-include_graphics("plots/size_comp_4.png")
-
-```
-
-\newpage
-
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{size_comp_5}Model fits (lines) to the female non-directed size composition data (grey bars)."}
-
-include_graphics("plots/size_comp_5.png")
+# 2. Loop through each file and include it on a new page
+for (f in img_files) {
+  # Insert the image using Markdown syntax
+  cat(paste0("![Model fits (lines) to size composition data (grey bars)](", f, ")\n\n"))
+  
+  # Insert a page break (different syntax for PDF vs HTML)
+  # For PDF output:
+  cat("\\newpage \n")
+}
 
 
 ```
 
 \newpage
-
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_m_imm}Model fits to immature male survey size composition data from 1982-1988."}
-
-include_graphics("plots/size_comp_6.png")
-```
-
-
-\newpage
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_f_imm}Model fits to immature female survey size composition data from 1982-1988."}
-
-include_graphics("plots/size_comp_8.png")
-```
-
-
-\newpage
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_m_mat}Model fits to mature male survey size composition data from 1982-1988."}
-include_graphics("plots/size_comp_7.png")
-```
-
-\newpage
-
-
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_f_mat}Model fits to mature female survey size composition data from 1982-1988."}
-include_graphics("plots/size_comp_9.png")
-
-```
-
-\newpage
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_m_imm2}Model fits to immature male survey size composition data from 1989-present."}
-
-include_graphics("plots/size_comp_10.png")
-```
-
-
-\newpage
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_f_imm2}Model fits to immature female survey size composition data from 1989-present."}
-
-include_graphics("plots/size_comp_12.png")
-```
-
-
-\newpage
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_m_mat2}Model fits to mature male survey size composition data from 1989-present."}
-include_graphics("plots/size_comp_11.png")
-```
-
-\newpage
-
-
-
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{survcomp_fits_f_mat2}Model fits to mature female survey size composition data from 1989-present."}
-include_graphics("plots/size_comp_13.png")
-
-```
-
 
 
 
@@ -1416,58 +1345,58 @@ print(p_f_mort)
 # --- 1. Extract and Process Maturity Data ---
 # case_for_data_table can be a single string or a vector of strings
 plotdat_all <- case_for_data_table %>%
-    purrr::map_dfr(function(case_name) {
-        # Access the output list directly
-        dat <- reslst$outsLst[[case_name]]$mature_probability
-        
-        if (is.null(dat)) {
-            message("Warning: No mature_probability data for ", case_name)
-            return(NULL)
-        }
-        
-        # Pivot from wide to long format
-        dat %>%
-            tidyr::pivot_longer(
-                cols = -c(Sex, Year), 
-                names_to = "width", 
-                values_to = "prob"
-            ) %>%
-            dplyr::mutate(
-                Model = case_name,
-                # Logic to separate models with "newmat"
-                Maturity_Source = ifelse(grepl("newmat", case_name, ignore.case = TRUE), 
-                                         "New Maturity Data (newmat)", 
-                                         "Standard Maturity Data"),
-                width = as.numeric(as.character(width)),
-                prob = as.numeric(prob),
-                # Ensure Year is a factor for discrete coloring if desired, 
-                # or keep numeric for a gradient
-                Year_Fact = as.factor(Year)
-            )
-    })
+  purrr::map_dfr(function(case_name) {
+    # Access the output list directly
+    dat <- reslst$outsLst[[case_name]]$mature_probability
+    
+    if (is.null(dat)) {
+      message("Warning: No mature_probability data for ", case_name)
+      return(NULL)
+    }
+    
+    # Pivot from wide to long format
+    dat %>%
+      tidyr::pivot_longer(
+        cols = -c(Sex, Year), 
+        names_to = "width", 
+        values_to = "prob"
+      ) %>%
+      dplyr::mutate(
+        Model = case_name,
+        # Logic to separate models with "newmat"
+        Maturity_Source = ifelse(grepl("newmat", case_name, ignore.case = TRUE), 
+                                 "New Maturity Data (newmat)", 
+                                 "Standard Maturity Data"),
+        width = as.numeric(as.character(width)),
+        prob = as.numeric(prob),
+        # Ensure Year is a factor for discrete coloring if desired, 
+        # or keep numeric for a gradient
+        Year_Fact = as.factor(Year)
+      )
+  })
 
 # --- 2. Generate the Split Plot ---
 p_molt <- ggplot(plotdat_all, aes(x = width, y = prob)) +
-    # Use group to ensure lines are drawn per Year/Model combination
-    geom_line(aes(col = Year_Fact, group = interaction(Year, Model)), 
-              lwd = 1.1, alpha = 0.7) +
-    # Force y-axis from 0 to 1
-    scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
-    theme_bw() +
-    labs(
-        x = "Carapace Width (mm)", 
-        y = "Probability of Terminal Molt",
-        col = "Year",
-        title = "Probability of Maturing / Terminal Molt",
-        subtitle = "Separated by Maturity Data Specification"
-    ) +
-    # Facet rows by Data Source (Standard vs Newmat) and columns by Sex
-    facet_grid(Maturity_Source ~ Sex) + 
-    theme(
-        legend.position = "bottom",
-        strip.background = element_rect(fill = "white"),
-        panel.spacing = unit(1, "lines")
-    )
+  # Use group to ensure lines are drawn per Year/Model combination
+  geom_line(aes(col = Year_Fact, group = interaction(Year, Model)), 
+            lwd = 1.1, alpha = 0.7) +
+  # Force y-axis from 0 to 1
+  scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
+  theme_bw() +
+  labs(
+    x = "Carapace Width (mm)", 
+    y = "Probability of Terminal Molt",
+    col = "Year",
+    title = "Probability of Maturing / Terminal Molt",
+    subtitle = "Separated by Maturity Data Specification"
+  ) +
+  # Facet rows by Data Source (Standard vs Newmat) and columns by Sex
+  facet_grid(Maturity_Source ~ Sex) + 
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "white"),
+    panel.spacing = unit(1, "lines")
+  )
 
 # Render the plot
 print(p_molt)
