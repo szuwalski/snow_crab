@@ -14,7 +14,9 @@ doParallel::registerDoParallel(cl)
 orig_drv <- c("25_gmacs_update_hyb_surv_and_fsh_newmat", 
               "25_gmacs_update_hyb_surv_and_fsh", 
               "25_gmacs_update_plus_group", 
-              "25_gmacs_update_newmat_plus_group")
+              "25_gmacs_update_newmat_plus_group",
+              "25_gmacs_update_imm_plus_group",
+              "25_gmacs_update_newmat_imm_plus_group")
 
 tot_it  <- 100
 orig_wd <- getwd()
