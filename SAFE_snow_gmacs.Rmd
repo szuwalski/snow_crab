@@ -1,22 +1,23 @@
 ---
+title: "Preliminary 2026 assessment for eastern Bering Sea snow crab"
 author: "Grant Adams"
 date: "May 2026"
 output:
+  word_document: default
   pdf_document:
-    fig_caption: yes
+    fig_caption: true
     fig_height: 4
     fig_width: 6
-header-includes:   
--  \usepackage{pdfpages}
+number_sections: true
+csl: "fish-and-fisheries.csl"
+toc: true
+header-includes:
+- \usepackage{pdfpages}
 - \usepackage{geometry}
 - \geometry{margin=1in}
-number_sections: yes
-csl: fish-and-fisheries.csl
-toc: yes
-title: "Preliminary 2026 assessment for eastern Bering Sea snow crab"
 ---
 
-```{r, include=FALSE}
+```{r, echo = FALSE, message = FALSE, warning = FALSE, include=FALSE}
 #tinytex::reinstall_tinytex(repository = "illinois")
 # Global knitr options
 knitr::opts_chunk$set(
@@ -52,13 +53,8 @@ pacman::p_load(coda, plotrix, miceadds)
 panderOptions('table.alignment.default', 'left')
 panderOptions('table.split.table', Inf)
 
-```
 
-\newpage
-
-
-```{r GMACS-getModelResults, include=FALSE}
-#  --- Load model results ---
+#  --- Load model results ----
 # Ensure rda_ModelsResLst.RData is in the working directory
 # it contains all the results from '05_buck_read_results.R"
 reslst <- wtsUtilities::getObj("rda_ModelsResLst.RData")
@@ -87,8 +83,8 @@ OFL_fleet_ind  <- 0
 source("0-models.R") # Load model definitions
 
 # Case selection
-case_for_resids     <- "25.1 gmacs" # model print size comp residuals for
-case_for_data_table <- c("25.1 gmacs", "25.1 gmacs (update + hyb_fishery)")
+case_for_resids     <- "25.1 gmacs (update + plus group)" # model print size comp residuals for
+case_for_data_table <- c("25.1 gmacs (update + plus group)", "25.1 gmacs (update + hyb_both)")
 report_model <- model_defs[1]
 
 
@@ -97,12 +93,7 @@ do_size_comps  <- 1 # Set to 1 to regenerate PNGs (can take time)
 do_proj        <- 0 # Set to 1 to process projection files
 make_proj_fig  <- 0 # Set to 1 to generate projection plots
 
-```
-
-\newpage
-
-```{r,echo=F,message=FALSE,warning=F,include=FALSE}
-
+# --- Plot size comp ----
 if(do_size_comps==1){
   # Extract results using Buck's package tools
   dfrZCs <- wtsGMACS::extractRep1Results(reslst, "Size_fit_summary") |> 
@@ -152,7 +143,7 @@ if(do_size_comps==1){
       theme_bw() +
       labs(x = "Year", y = "Carapace width (mm)", col = "Residual direction", size = "Raw residual size")
     
-    ggsave(paste("plots/size_comp_resid_", curr_id, "_", compname,".png"), p_res, height = 10, width = 8, dpi = 300)
+    ggsave(paste0("plots/size_comp_resid_", curr_id, "_", compname, ".png"), p_res, height = 10, width = 8, dpi = 300)
   }
 }
 
@@ -172,7 +163,7 @@ if(do_size_comps==1){
 # run code below to pull relevant info, be sure to modify years to make 'mcoutPROJ.REP'
 
 # BE SURE TO CHANGE THE F IN THE PROJ FILE TO THE FOFL
-proj_dir<-paste0(dirname(getwd()), "/snow_crab/25_gmacs/")
+proj_dir <- file.path(getwd(), report_model)
 
 if(do_proj==1)
 {
@@ -210,7 +201,7 @@ if(make_proj_fig==1)
   
   #==compare to survey biomass
   tmp<-readLines(paste(model_defs[1],"/Gmacsall.out",sep=''))
-  male_wt_len<-as.numeric(filter(reslst$repsLst$'25.3 gmacs'$IndivWeightByXM,Sex=="male"&Year=="1982"&Maturity=='mature')[,4:25])
+  male_wt_len<-as.numeric(filter(reslst$repsLst[[names(report_model)]]$IndivWeightByXM,Sex=="male"&Year=="1982"&Maturity=='mature')[,4:25])
   
   #==mature males
   st<-grep(c("N(males): dataframe"),tmp,fixed=TRUE)
@@ -243,46 +234,73 @@ if(make_proj_fig==1)
 
 ```
 
-\newpage
+# A. Executive summary
 
-\listoftables
+This document is a preliminary stock assessment for eastern Bering Sea (EBS) snow crab (*Chionoecetes opilio*) prepared for the May 2026 Crab Plan Team (CPT) meeting. Its purpose is to present model explorations requested by the SSC and CPT in 2025 and to seek guidance on which models to advance to the September 2026 final assessment cycle.
 
-\newpage
+The 2026 cycle focused on three exploratory threads: (1) the influence of *Chionoecetes* hybrids (snow $\times$ Tanner crab) on assessment estimates when included in the survey and/or fishery time-series and composition data; (2) the impact of an updated maturity workflow developed by the Kodiak lab (Ryznar, in prep) that produces a spatiotemporally smoothed probability of terminal molt at size; and (3) attempts to improve model convergence (a "two cloud" jitter pattern was observed in the September 2025 assessment) using an updated plus group, a corrected total-male composition input, and the addition of an immature survey index.
 
-\listoffigures
+A total of `r length(model_defs)` models are presented (\autoref{stepchange}, \autoref{like_comp_tot}). Across the candidate models, point estimates of the directed Tier 3 OFL ranged from approximately 36 to 56 thousand tonnes (kt), with the spread driven primarily by whether the immature survey index was included (which dramatically changes the scale of $B_{MSY}$ and target $F$), whether hybrid catch was added to the directed pot fishery, and whether the new maturity workflow (which has a much weaker temporal trend in the probability of terminal molt at size) was used to specify the time-varying maturity ogive. The status of the stock relative to $B_{MSY}$ in the candidate models was generally between 0.87 and 1.02. No author preferred model or final OFL is recommended at this time -- additional diagnostics, retrospective analyses, and Tier 4 calculations will be developed for the September document.
 
-\newpage
+The most important finding from the May explorations is that the bimodality observed in the 2025 jitter analysis (two clouds of converged models with directed OFLs differing by ~5,000 t) does not persist when the immature survey index is included alongside the updated plus group. However, the immature index version of the model produces a much smaller $B_{MSY}$ proxy and a substantially higher mature male natural mortality that warrants further investigation before September.
 
-
-# Executive summary
-
-
-\newpage
 # B. Comments, responses and assessment summary
 ## SSC and CPT comments + author responses from June 2025
 
-*2024(10) SSC. SSC recommends standardizing the approach to the Tier 4 fallback across BBRKC, Tanner and snow crab assessments so that the same methods are used for each including all mature male biomass, a BMSY proxy based on the time-series of REMA-smoothed survey estimates and an FMSY proxy based on the best estimate of natural mortality (from the Tier 3 model). As the SSC intends the Tier 4 calculation only as a fallback if the Tier 3 analysis fails to converge, no other Tier 4 calculations need to be included in future assessments.*
-Author response
+*2025(6) SSC. The maximin analysis should be completed assuming a Ricker stock-recruitment relationship, but including the same compensation ratios as the original Clark (1991) analysis.* 
 
-*2024(6) CPT. Tier 4 fallback - CPT supports: The author suggested an alternative for snow crab to the basic Tier 4 calculation that is being brought forward for other stocks. Specifically, a fallback Tier 4 option would be calculated as the vulnerable biomass in this year’s survey (not smoothed, and vulnerable defined by a cutoff of 95 mm CW), decremented by the proportion of natural mortality that occurs between the time of the survey and the fishery, and M applied as the proxy for FMSY to calculate the Tier 4 OFL. The motivations identified for using the annual survey design-based estimate of vulnerable biomass rather than a REMA smooth through the survey time series were: 1) that the high number of positive stations for snow crab on survey (238 stations in 2023) make the design-based estimate a robust measure of annual biomass; and 2) that the large interannual fluctuations in biomass observed in some recent years would be poorly captured by a smooth. The motivation for decrementing the biomass estimate by the proportion of natural mortality occurring between the survey and the fishery is that failing to account for this mortality could lead to unintentionally high values of F if the Tier 4 fallback was used.*
-Author response
+The Ricker curves (Figure 1) used in Clark were implemented in the maximin analysis presented last cycle (and now published in Fisheries Research: Szuwalski and Punt (2025) “Spawning-biomass-per-recruit proxies for fisheries reference points under multiple axes of uncertainty”). Incorporating these into the analysis shifted the SPBR% from ~36% to ~34% (Figure 2).
+
+*2025(6) SSC. As the figures presented on the updated 1991+ catch data appear to indicate substantial differences in male discards, the SSC requests that the September document more clearly describe changes in the discard estimation and accounting process.*
+
+A presentation from January 2025 from ADFG (available on the council website) noted that the largest changes occurred for total catch through implementing consistent data filtering, expansion using directed pot lifts, and adjustments to biological strata. This process now allows for the production of a data file with all years of available data for each assessment cycle, rather than single years at a time which were appended to an existing data file. An apparent shift upwards in discards of males from the directed fishery results primarily from a change in when discard mortality is applied (before input into the data file [before 2025] or within the assessment code itself [after 2025]).
+
+*2025(6) SSC. Given the findings described in Mullowney and Baker (2021) from Canadian research indicating that the molt to maturity may occur at smaller sizes when lower densities of large males are present, it would be useful to determine if there is evidence for the same process occurring in EBS snow crab, and whether fishing mortality on the large males is consistently high enough to result in a strong effect. Further, it would be useful to evaluate whether clutch fullness may be related to size at maturity or the abundance of large-sized crab.*
+
+*Given that natural mortality events seem to switch among years and sexes depending on the model or input data, it would be prudent to investigate whether it is possible to estimate a direct link between natural mortality and a bottom temperature covariate of appropriate spatial and temporal scale.*
+A manuscript describing both of these relationships for Bering Sea snow crab was presented in May/June 2024 (Figure 3; “Density dependence can modulate climate change impacts on populations”) and was published in 2026 (Szuwalski et al., 2026). In that manuscript, warmer temperatures were associated with elevated mortality and higher densities of large males were associated with lower probabilities of terminally molting at
+size. 
+
+The SSC responded to this presentation with the following text: “The SSC emphasizes that projections of climate change impacts, while useful, are highly uncertain and. . . caution should be used when presenting
+these results.”
+
+Clutch fullness does not appear to be related to the abundance of large-size crab based on analyses in “Spatial depletion rates in the eastern Bering Sea snow crab fishery” (also presented in May 2024 and now in review for external publication). It is unclear if there is any relationship between clutch fullness and recruitment, though preliminary analyses suggest clutch fullness is not an important covariate for predicting recruitment strength.
+
+These analyses come with the caveat that the Kodiak lab is revising their methods for analyzing the maturity data for snow crab.
+
+*2025(6) SSC. To explore development of an ABC control rule, the SSC requests that a yield per recruit analysis be developed for snow crab.*
+Time did not allow for this exercise.
+
+*2024(10) SSC. SSC recommends standardizing the approach to the Tier 4 fallback across BBRKC, Tanner and snow crab assessments so that the same methods are used for each including all mature male biomass, a BMSY proxy based on the time-series of REMA-smoothed survey estimates and an FMSY proxy based on the best estimate of natural mortality (from the Tier 3 model). As the SSC intends the Tier 4 calculation only as a fallback if the Tier 3 analysis fails to converge, no other Tier 4 calculations need to be included in future assessments.*
+
+In the 2025 document, Tier 4 HCRs were applied to rema-smoothed survey biomass estimates of three different size ranges: morphometrically mature males, large males (>=95mm), and preferred males (>101mm). The target biomass was set as the average of the time series from 1982-2024 and the target fishing mortality was set as 0.27, the median of the prior on natural mortality used in the integrated assessment. No kink exists in this harvest control rule. The resulting OFLs were 28.41 kt, 8.64 kt, and 6.11 kt for morphometric, large, and preferred males, respectively.
 
 *2024(10) SSC. The SSC highlighted that more research is needed on the basic reproductive biology of snow crab, specifically addressing the question of whether small males can and do mate with large females and produce progeny that will be large males under the right environmental conditions. The SSC strongly supports the proposed collaborative research to explore in situ observations of mating crab using a camera sled.*
-Author response
+We agree and no new research has been conducted within this timeframe. 
 
 
 *2024(10) SSC. The highest priority would be to continue to refine the Maximin analysis as requested by the SSC in June 2024, specially using values of steepness of 0.50, 0.67, and 0.80, and considering both the Beverton-Holt and Ricker stock recruitment relationships. The yield analysis also indicated that fishing mortality rates much lower than F35% achieved a high percentage of MSY, indicating potential flexibility in specifying reference points. The SSC suggested that some type of collaborative work during the spring, perhaps including SSC members and/or others might facilitate additional progress on this topic. The SSC is interested in developing a wider range of options for reference points for snow crab for consideration in the next assessment cycle.*
-Author response
+The analysis was not extended beyond what was presented in appendix A of the 2024 SAFE and would be of limited use until we know more about reproductive contribution of large male snow crab. The specific values for steepness noted by the SSC are arbitrary and do not match observations, estimates, or available data on the reproductive dynamics of snow crab. Until then, we know that the fishery will not exist without large males and we know that the large males are at historical lows, so we should focus our efforts on understanding the dynamics of large males.
 
 *2024(10) SSC. The SSC again requests an analysis of the probability of maturing/terminal molt which addresses the observation error in these data and the lack of a monotonically increasing curve. A hierarchical analysis that treats years as random effects might be a starting point. The SSC would also like to better understand the sampling design for the molt data and is concerned about the weighting of the spatial samples in the analysis; weighting should be based on abundance if the sampling rate differs by area (which it would, unless abundance were uniform and/or the targets were in direct proportion to abundance).*
-Author response
+The Kodiak lab gave a presentation describing how these data are analyzed. Potential changes to this workflow produces different values for the probability of having undergone terminal molt. Two models runs are included within the 2025 preliminary assessment and the current document to explore the impact of different assumptions about the probability of terminal molt.
 
 *2024(10) SSC. Investigate whether there is information outside the assessment model (e.g., larval or post-settlement data) or in the model, supporting estimated skewed sex-ratios at recruitment and the mismatch between recent large recruitments for males and females occurring in different years. Explore whether the estimated large differences in male and female recruitment years could be related to the lack of fit to molt-increment data.*
-Author response
+No new information has come to light on why this might be the case. Previous discussion centered around the possibility that different spatial distributions by sex of small crab could expose them to different environments, which could alter what we perceive as recruitment five years after settlement. While this difference is an interesting scientific question to pursue, solving it will not address the central problem in management: commercially preferred males are at historic lows over the last decade. Removing the females from the model entirely might be a prudent step towards focusing on the most pressing management problem at hand given conflicting trends.
 
 *2024(10) SSC. Geostatistical (e.g. VAST) modeling of trawl survey data including both the NBS and EBS should be prioritized. This could help understand some of the inconsistent recruitment/growth trends observed in recent years as well as prepare for potential changes in stock distribution or productivity under future warming of the Bering Sea. Geostatistical modeling should evaluate alternative error distributions and other model configurations as appropriate.*
-Author response
+The Kodiak lab presented indices for mature females and large males in the 2025 May CPT.
 
+*2024(6) CPT. Tier 4 fallback - CPT supports: The author suggested an alternative for snow crab to the basic Tier 4 calculation that is being brought forward for other stocks. Specifically, a fallback Tier 4 option would be calculated as the vulnerable biomass in this year’s survey (not smoothed, and vulnerable defined by a cutoff of 95 mm CW), decremented by the proportion of natural mortality that occurs between the time of the survey and the fishery, and M applied as the proxy for FMSY to calculate the Tier 4 OFL. The motivations identified for using the annual survey design-based estimate of vulnerable biomass rather than a REMA smooth through the survey time series were: 1) that the high number of positive stations for snow crab on survey (238 stations in 2023) make the design-based estimate a robust measure of annual biomass; and 2) that the large interannual fluctuations in biomass observed in some recent years would be poorly captured by a smooth. The motivation for decrementing the biomass estimate by the proportion of natural mortality occurring between the survey and the fishery is that failing to account for this mortality could lead to unintentionally high values of F if the Tier 4 fallback was used.*
+No response.
+
+*2024(6) SSC. Concerning the GMACS assessment model, the SSC continues to recommend that the assessment author explore ways to incorporate the molt to maturity data in the model in a way that reflects the observation error associated with those estimates. An analysis in a GLMM modeling framework, which treats years as random effects, would provide smoother estimates, accommodate differing sample sizes by year and length, and deal appropriately with years in which data are missing. Another possibility that was suggested in the CPT report was to include the annual observed probabilities of terminal molt as data and then fit them, as in the Tanner crab assessment.*
+
+The observation error is not considered when preparing the data that enters the assessment, so it is hard to understand how trying to consider uncertainty in the model that doesn’t exist in the input data will provide meaningful results. I will try to do a better job of explaining this in my presentations. This is not to say there is no uncertainty in the probability of undergoing terminal molt, only that it is a less pressing problem than identifying appropriate reference points for snow crab.
+
+
+*2024(6) SSC. The SSC recommends that this model be brought forward in the fall but requests that an additional Tier 4 model be provided for comparison, as recommended in the Simpler Modeling Workshop report and requested in the SSC’s June 2023 and October 2023 Reports. This additional model would use the random effects model (REMA) to smooth survey estimates and would not decrement with natural mortality.*
+This is included in 2024 SAFE document.
 
 \newpage
 
@@ -308,6 +326,42 @@ The key assumptions of these models include:
 * recruitment is estimated separately for females and males and is allocated in the first 3 size bins
 
 
+## Model scenarios
+
+A total of `r length(model_defs)` models are presented in this preliminary document. All models share the structural assumptions described above and differ only in their data inputs, the specification of the maturity ogive, and the definition of the plus group. The naming convention reflects an additive series of changes layered onto the September 2025 model ('25.1 gmacs'). The full set of folders and the corresponding labels used in the figures and tables are defined in `0-models.R`.
+
+The base ('rolled forward') model:
+
+* **25.1 gmacs** -- the September 2025 author-recommended model, included for reference only. No data are updated and no structural changes are made.
+
+* **25.1 gmacs (update)** -- the September 2025 model with all data sources updated through the 2025 NMFS summer survey and the 2024/2025 directed and non-directed fishery seasons.
+
+A series of incremental data and structural fixes:
+
+* **25.1 gmacs (update + compfix)** -- as 'update', but the total male composition input file is replaced with `tot_sc_m.csv` produced by the updated catch-processing R script. This corrects a small discrepancy between the file used in September 2025 and the version produced by the script.
+
+* **25.1 gmacs (update + plus group)** -- as 'update', but the plus group is enlarged to include all crab in size bins greater than 135 mm carapace width (the previous specification was 132.5 mm). The retained male, total male, and discard female composition files are also re-binned through the updated R script (`ret_sc.csv`, `tot_sc_m.csv`, `tot_sc_f.csv`). This model ran substantially faster than the 'update' model and provides the structural backbone for several of the sensitivities below.
+
+* **25.1 gmacs (update + imm_surv + compfix)** and **25.1 gmacs (update + imm_surv + plus group)** -- as 'compfix' and 'plus group', respectively, but with an immature survey index of biomass added (per C. Szuwalski). The immature index provides direct information on the abundance of immature crab and was found to remove the bimodality observed in jitter analyses (see Results).
+
+The maturity exploration:
+
+* **25.1 gmacs (update + new_mat)** -- as 'update', but with the molting probability controls (the time- and size-varying probability of terminal molt) replaced with the array produced by the new maturity workflow developed by the Kodiak lab (E. Ryznar, in prep). The new workflow uses an `sdmTMB` spatiotemporal model fit to chela-based maturity classifications to produce a smoothed probability of being mature at size and location, integrated to a population-level annual ogive. The updated time series shows a much weaker temporal trend in the probability of terminal molt at intermediate sizes (e.g., at 77 mm) than the previous workflow.
+
+* **25.1 gmacs (update + new_mat + compfix)** -- combination of the comp-fix and the new maturity workflow.
+
+* **25.1 gmacs (update + new_mat + plus group)** -- combination of the plus group and the new maturity workflow.
+
+The hybrid exploration. Hybrid catch and composition data were provided by ADF&G (T. Jackson, ADF&G Commercial Fisheries) as a separate species code lumped across opilio-type, bairdi-type, and unspecified hybrids; weights were calculated using snow crab length--weight parameters because the overwhelming majority of hybrids are of the opilio type. These data are *additive* to the existing snow-crab time-series, except for retained catch which already contains hybrids landed under the snow-crab IFQ. The R script `01_update_catch_data_hybrids.R` produces the data files used in the hybrid sensitivities by summing hybrid numbers/weights at size into the snow crab files.
+
+* **25.1 gmacs (update + hyb_fishery)** -- the plus-group model with hybrids added to the directed-fishery composition (`tot_sc_and_hy_m.csv`, `tot_sc_and_hy_f.csv`) and discard time-series (`dir_disc_m_f_snow_and_hybrid.csv`, columns 1 and 2 mapped to the male and female discard pot fishery, respectively). The CV on directed discards is held at 0.7. The retained male time-series uses `ret_sc_and_hy.csv` (which is identical to the snow-crab retained file because retained catch already contains hybrids). Observer non-directed bycatch is left unchanged.
+
+* **25.1 gmacs (update + hyb_surv)** -- the plus-group model with hybrid catch and composition added to the NMFS summer trawl survey time-series only.
+
+* **25.1 gmacs (update + hyb_both)** -- combination of `hyb_fishery` and `hyb_surv`.
+
+* **25.1 gmacs (update + hyb_both_new_mat)** -- combination of `hyb_both` and the new maturity workflow.
+
 # F. Analytic approach
 
 
@@ -325,35 +379,35 @@ A single population dynamics model is presented here, with the differences among
 Models were evaluated based on their fit to the data, evidence of non-convergence, the credibility of the estimated population processes, and the strength of the influence of the assumptions of the model on the outcomes of the assessment. 
 
 ## Results
-### Model convergence and comparison 
-Model 25.3 produced a small maximum gradient and produced a Hessian matrix. However, jittering produced two clouds of 'converged' models with OFLs that differed by 5,000 tonnes and negative log likelihoods that differed by ~0.2 units (\autoref{jitter}). Repeating the jittering for a model that uses large males as currency produced two clouds of OFLs with a difference of approximately 1,000 tonnes (\autoref{jitter95}). The difference in OFLs from both of these jittering runs resulted from differences in the terminal estimates of MMB, which were driven by differences in estimated recruitment in the recent past (\autoref{jitt_rec}). Bimodality in management quantities has been a reoccurring problem in the assessment for snow crab. Below, the results for '25.3 gmacs' (i.e. the model with morphometrically MMB used as currency) and '25.3 gmacs (>=95mm)' are derived from the model that had the lowest negative log likelihood from 100 jitters. 
+### Model convergence and comparison
+All `r length(model_defs)` models presented here produced small maximum gradients and Hessian matrices. As in past cycles, jittering was used to evaluate sensitivity to starting values: parameter values were jittered based on a normal distribution centered on one with a standard deviation of 0.1, translated to the parameter space defined by the initial value and its bounds. One hundred jitters were run for four models that span the range of structural and data choices in `03_jittering_parallel.R` -- '25.1 gmacs (update + plus group)', '25.1 gmacs (update + new_mat + plus group)', '25.1 gmacs (update + hyb_both)', and '25.1 gmacs (update + hyb_both_new_mat)' -- and the immature-index plus-group model was jittered separately (C. Szuwalski, pers. comm.) (\autoref{jitter}).
 
-The model had difficulties fitting the terminal year of female biomass and potential fixes were explored (e.g. inputting a yearly varying probability of terminal molt), but none yielded markedly different results from model '25.3 gmacs', so were not included here. This issue will be explored more fully for the May 2026 meeting.
+The bimodality in management quantities reported in the 2025 preliminary and final assessments persists in most of the 2026 candidate models that do *not* include the immature survey index, with two distinct clouds of converged models separated by ~50--100 negative-log-likelihood units and OFLs that differ by several thousand tonnes. Adding the immature survey index alongside the updated plus group ('25.1 gmacs (update + imm_surv + plus group)') eliminates the bimodality entirely -- jitter runs converge to a single cloud of solutions (\autoref{jitter}). This is an encouraging diagnostic, but the immature-index model also produces a substantially smaller $B_{MSY}$ and a much higher mature male natural mortality (see below), so the apparent fix should not be interpreted as an unqualified improvement. The recent history of bimodality in this assessment (Turnock, 2016) suggests that resolving the underlying source of multiple optima will require careful follow-up before September.
+
+The 'update' model continues to have difficulty fitting the terminal year of female biomass. Inputting a yearly varying probability of terminal molt from the new maturity workflow ('new_mat' models) shifts the estimated population dynamics modestly but does not resolve the female terminal-year fit (\autoref{predmat}, \autoref{mmbfits}).
 
 ### Model fits
-Fits to the survey indices of mature biomass were similar among models, even with the revision of the data (\autoref{mmbfits}). Updating the version of GMACS resulted in a downward revision of the 2018 mature female biomass estimate. 
+Fits to the survey indices of mature biomass were broadly similar across the models (\autoref{mmbfits}). The hybrid-survey models produce visibly higher predicted survey biomass in some years (the additional hybrid biomass is added to the snow-crab time-series), but the trend through time is unchanged. The models with the immature survey index ('imm_surv') fit the new immature index well in recent years.
 
-In May 2025, convergence issues arose with the addition of new growth data. This was solved in this assessment by only including data points for sizes modeled within the assessment model and using smaller input CVs for the points over 35 mm pre-molt carapace width for females. This is a range in which there were fewer observations which were historically poorly fit because of the abundance of data at smaller sizes. No changes were made to the CVs for male growth increment data. Updating the growth data in this manner resulted in changes in estimated molt increments given pre-molt carapace width for both males and females (\autoref{growthfits}).The estimated molt increments for males were smaller than historical estimates for smaller pre-molt carapace width until approximately 60mm carapace width, when the estimated molt increments began to be larger than historical estimates. 
+Fits to the non-directed fishery catches were good for all models (\autoref{catchfits}). Fits to the directed-fishery retained catch were also good across the model set. Fits to the directed-fishery discard time-series differ in the hybrid-fishery models because the observed discards in those models include hybrid crab (and so are larger; e.g., ~18 kt of legal-male hybrid catch in 1997 reported by ADF&G with the caveat that observer hybrid identification quality decreases the further back in time one looks). The models accommodate the additional discards primarily through changes in estimated discard fishing mortality rather than through major changes in selectivity.
 
-Fits to the non-directed fishery catches were good for both the original and revised data sets (\autoref{catchfits}). However, in the directed fishery, fits deteriorated somewhat with the updated dataset. Although most of the retained catch data were still fit well, the model was unable to capture several years of discarded data that historically were well fit (e.g. 1991, 1994 and 2019).  
+Differences among models in the fits to size composition data for retained catch in the directed fishery are small (size composition figures, below). Fits to the total size composition data from the directed fishery differ noticeably between the standard and the hybrid-fishery models, particularly for the larger size bins where hybrids are most prevalent. No visually discernible differences among models existed for female discards from the directed fishery. Fits to the non-directed fishery had some of the largest misfits of all data sources (particularly for male data), but this is unsurprising given a single estimated selectivity curve and potential changes in fishery behavior over time.
 
-Only small differences were observed among models in the fits to size composition data for retained catch in the directed fishery, with the most recently occuring fishery (2021) showing the largest differences (\autoref{size_comp_1}). Fits to the total size composition data from the directed fishery were distinctly different once the growth data were updated in the models (\autoref{size_comp_2}). No visually discernible differences among models existed for female discards from the directed fishery (\autoref{size_comp_3}). Fits to the non-directed fishery had some of the largest misfits of all data sources (particularly for male data), but this is unsurprising given a single estimated selectivity curve and potential changes in fishery behavior over time (\autoref{size_comp_4} & \autoref{size_comp_5}).
-
-Fits to the survey size composition data were broadly similar between the two models in most years (\autoref{survcomp_fits_m_imm} - \autoref{survcomp_fits_f_mat2}). Both models had issues fitting the size composition data for mature males immediately after the collapse, which could suggest some unmodelled size-based mortality (\autoref{survcomp_fits_m_mat}). 
+Fits to the survey size composition data were broadly similar across models in most years (size composition figures, below). The plus-group change (extending the plus group to all crab > 135 mm) makes a small visual difference for retained males but improves the runtime of the model substantially. All models had difficulty fitting the size composition data for mature males immediately after the early-1990s collapse, which could suggest some unmodelled size-based mortality.
 
 ### Estimated population processes
-The estimated abundance of commercially preferred of male crab (arguably the most important output of the assessment) varied among models (\autoref{obs_101_vs_pred}). The early years during which differences in survey selectivity occurred were particularly different. Both models agreed that the abundance in recent years have been the lowest in the time series. The estimates of the most recent era of survey selectivity were fairly similar across models for both sexes (\autoref{select_prior}).  
+The estimated abundance of commercially preferred male crab (>=101 mm carapace width; arguably the most important output of the assessment) varied among models (\autoref{obs_101_vs_pred}). The early years during which differences in survey selectivity occurred were particularly different. All models agreed that the abundance in recent years has been the lowest in the time series. The estimates of the most recent era of survey selectivity were similar across models for both sexes (\autoref{select_prior}).
 
-Estimated fisheries selectivities were similar for both models (\autoref{predselectfish}). Estimated fully-selected fishing mortality for the directed fishery was highly variable and relatively high for most of the fishery history (\autoref{predfmort}). The total fishery selectivity curve is shifted far to the right, so only the largest crab are experiencing the fully-selected fishing mortality. The probability of undergoing terminal molt used to separate crab into immature and mature survey indices were input as data to the assessment (\autoref{predmat}). 
+Estimated fisheries selectivities were similar across models (\autoref{predselectfish}). Estimated fully-selected fishing mortality for the directed fishery was highly variable and relatively high for most of the fishery history (\autoref{predfmort}). The total fishery selectivity curve is shifted far to the right, so only the largest crab experience the fully-selected fishing mortality. The probability of undergoing terminal molt is input as data; the standard workflow produces a strong increasing trend through time at intermediate sizes (e.g., at 77 mm the probability rose from ~0.2 in the early 1990s to ~0.5 after 2010), while the new maturity workflow produces a much weaker temporal trend (~0.35--0.45 throughout the time series; \autoref{predmat}). The new workflow uses a spatiotemporal `sdmTMB` model fit to chela-based maturity classifications and borrows strength across years and locations for size bins with sparse chela data; it does not extrapolate the predicted spatial probability surface beyond stations with measured crab.
 
-Trends in recruitment were very similar across models, with some variability in scale and differences in timing between the sexes (\autoref{recruits}). Differences in estimated recruitment in the most recent years were also observed for males among models and this appears to have contributed to the differences in OFLs among jittering runs. 
+Trends in recruitment were very similar across models for the early time series, with some variability in scale and differences in timing between the sexes (\autoref{recruits}). Differences in estimated recruitment in the most recent years were observed among models for males and contribute to differences in OFLs across the model set.
 
-Base estimates of natural mortality were similar for mature animals of both sexes, except for immature females, which were much higher with the new growth data and weighting scheme (\autoref{nat_m}). All models estimated mortality events that removed at least 80% of crab by sex and maturity state (except for mature females) at some point during the marine heatwave of 2018-19.
+Base estimates of natural mortality for mature animals of both sexes were broadly similar across models, with one important exception: the model with the immature survey index produces a substantially higher mature male natural mortality than the other models (\autoref{nat_m}). All models estimated additional mortality events that removed at least 80% of crab by sex and maturity state (except for mature females) at some point during the marine heatwave of 2018--19.
 
 ### MMB and management quantities
-Estimated MMB time series had similar trends but the scales differed by up to ~50% in some years (\autoref{predmmb}). The scale of MMB when large males were used in the calculation was predictably much lower than when morphometrically mature males were used, but the trends were similar. It should be noted that these values are calculated after the fishery, so the declining trends in these estimates are much larger, particularly for the large males, if MMB is calculated before the fishery (see discussion below). Changes in these estimates over the last ten assessment can be seen in \autoref{hist_mmb}.
+Estimated mature male biomass time series had similar trends across models but the scales differed by up to ~50% in some years (\autoref{predmmb}). Estimates of $B_{MSY}$, current MMB relative to $B_{MSY}$, $F_{MSY}$, $F_{OFL}$, and the directed Tier 3 OFL are summarized in \autoref{stepchange}. Across models other than the immature-index sensitivity, $B_{MSY}$ ranged from ~160 to ~184 kt and the directed OFL ranged from ~42 to ~56 kt, with current MMB at 87--102% of $B_{MSY}$. The immature-index plus-group model produced an outlier $B_{MSY}$ of 94 kt and an OFL of ~36 kt despite achieving a similar status; this large difference results from the much larger estimated mature male natural mortality in that model, which propagates into the spawning biomass-per-recruit reference points.
 
-Differences in estimates and currencies of MMB resulted in large differences in the management targets and advice (\autoref{stepchange}; discussed below). All models that use morphometrically mature male biomass as the currency of management produced target fishing mortality rates that would allow for the removal of all of the largest male crab. 
+The hybrid-fishery and hybrid-both models produced slightly lower $B_{MSY}$ proxies (~166--170 kt) than the corresponding non-hybrid models (~178--184 kt), reflecting the additional fishing mortality implied by the larger discard time-series. The new-maturity models produced $B_{MSY}$ proxies near the lower end of the non-hybrid range (~172 kt) but the highest OFLs (~50--52 kt) because the weaker time trend in the probability of terminal molt translates into more crab being available at the size bins targeted by the fishery in the projection window.
 
 # G. Calculation of the OFL
 ## Methodology for OFL 
@@ -375,30 +429,55 @@ Where MMB is the projected morphometrically mature male biomass in the current s
 
 In addition to the status quo tier 3 control rule, a variation in which >=95mm carapace width mature male biomass was used as the currency of management is presented here.
 
-Calculated tier 3 OFLs ranged from 3.26 to 44.29 kt (\autoref{stepchange}). Differences in OFLs were a result of differences in estimated MMB and the currency used for MMB.  
+Calculated Tier 3 OFLs across the `r length(model_defs)` candidate models ranged from approximately 36 to 56 kt (\autoref{stepchange}). Differences in OFLs were a result of differences in estimated MMB and the currency used for MMB; the immature-survey-index sensitivity sat at the low end of the range and the new-maturity sensitivities sat at the high end.
 
 ### Tier 4
-Tier 4 HCRs were applied to rema-smoothed survey biomass estimates of three different size ranges: morphometrically mature males, large males (>=95mm), and preferred males (>101mm). The target biomass was set as the average of the time series from 1982-2024 and the target fishing mortality was set as 0.27, the median of the prior on natural mortality used in the integrated assessment. No kink exists in this harvest control rule. The resulting OFLs were 28.41 kt, 8.64 kt, and 6.11 kt for morphometric, large, and preferred males, respectively (\autoref{tier4}). 
+A Tier 4 fallback was not recalculated for this preliminary cycle. For reference, the September 2025 assessment applied Tier 4 HCRs to REMA-smoothed survey biomass estimates of three size ranges: morphometrically mature males, large males (>=95mm), and preferred males (>101mm), with the target biomass set as the 1982-2024 average and target fishing mortality set as 0.27 (the median of the prior on natural mortality). The resulting 2025 OFLs were 28.41 kt, 8.64 kt, and 6.11 kt for morphometric, large, and preferred males, respectively. An updated Tier 4 calculation following the standardized Tier 4 fallback recommended by the October 2024 SSC will be presented in the September 2026 document for whichever Tier 3 model is preferred.
 
 
-# Calculation of the ABC
+# H. Calculation of the ABC
 
-The recommended acceptable biological catch (ABC) was calculated by subtracting a 20% buffer from the OFL to account for scientific uncertainty.
+The recommended acceptable biological catch (ABC) is calculated by subtracting a 20% buffer from the OFL to account for scientific uncertainty.
 
-The buffers for the last five years used by the SSC were: 65% (2024), 50% (2023), (October 2022 SSC reports are not available online), 25% (2021), and 25% (2020).
+The buffers for the last six years used by the SSC were: 25% (2025), 65% (2024), 50% (2023), (October 2022 SSC reports are not available online), 25% (2021), and 25% (2020).
 
 \newpage
 
 ## Author recommendations
 
+This document is preliminary and no author-recommended OFL is presented. The author requests CPT and SSC guidance on which subset of the `r length(model_defs)` candidate models to advance to the September 2026 final assessment cycle. Specifically, the author requests guidance on:
+
+1. **The plus-group structural change.** The updated plus group at >135 mm runs substantially faster, makes the size-composition fits at the largest sizes more interpretable, and does not appreciably change management quantities. The author suggests adopting this as the new structural baseline for September.
+
+2. **Inclusion of an immature survey index.** Adding the index resolves the long-standing bimodality observed in jitters but produces a substantially smaller $B_{MSY}$ proxy and a much larger mature male natural mortality. Before September the author intends to investigate whether the higher M is biologically credible (e.g., consistent with the mortality events implied by the 2018--19 marine heatwave) or whether it reflects model misspecification trying to reconcile the new index with the existing data.
+
+3. **The new maturity workflow.** The Kodiak lab's spatiotemporal `sdmTMB`-based workflow produces a time series with a much weaker temporal trend in the probability of terminal molt at intermediate sizes than the legacy workflow. The author has no strong basis for preferring one workflow over the other at this time and requests CPT/SSC guidance on whether to adopt the new workflow as the default input.
+
+4. **Hybrid treatment.** The author presents three hybrid sensitivities (fishery only, survey only, and both) layered onto the plus-group base. Including hybrids reduces $B_{MSY}$ slightly and changes the directed OFL by a few thousand tonnes. ADF&G has flagged that hybrid identification quality decreases in the older portions of the time series (notably the 1997--98 period when reported hybrid catches were very large) and that ADF&G and NMFS do not currently use identical hybrid identification criteria. The author requests CPT/SSC guidance on whether hybrids should be accounted for in the assessment, and if so whether the fishery-only, survey-only, or combined treatment is preferred.
+
+For September the author plans to: (a) finalize the plus-group structural change; (b) develop a Tier 4 fallback for whichever Tier 3 model is preferred; (c) complete retrospective analyses for the recommended models; (d) coordinate with ADF&G on a recommended approach to the older hybrid identification data; and (e) coordinate with the Kodiak lab on documentation of the new maturity workflow that can be cited in the assessment.
 
 # I. Data gaps and research priorities
 
+Several data and structural issues identified during the May 2026 cycle warrant follow-up:
 
+* **Hybrid identification consistency between ADF&G and NMFS.** ADF&G classifies hybrid crab into three categories (opilio-type, bairdi-type, and unspecified) using a hybrid identification key based on eye color, epistome shape, and secondary morphological characteristics. ADF&G and NMFS do not currently agree on the number of secondary characteristics required for a positive hybrid identification, and the unspecified-hybrid category contains a non-trivial portion of the time series. Resolving identification criteria across agencies and propagating the resulting categorization back through the historical observer time series would improve the hybrid-data products available to the assessment.
+
+* **Apportionment of retained catch between snow crab and hybrids.** Hybrids are currently retained under either the snow-crab or the Tanner-crab IFQ depending on regulatory identification but are not separately tracked in the retained-catch data delivered to the assessment. ADF&G has indicated it does not yet have a method for partitioning historical retained catch into hybrid versus parent species. Developing such a partitioning would allow the hybrid sensitivity to be explored more fully (presently the retained time-series is identical between the hybrid and non-hybrid models because retained catch already contains hybrids).
+
+* **Quality control on early hybrid catch estimates.** The ADF&G hybrid total-catch estimates contain unexpectedly large values in 1997 (~18 kt of legal-male hybrid catch) and 1998 (~15 kt), with high-CPUE pots peppered around the fishery footprint rather than concentrated in obvious hot spots. ADF&G has flagged these years as requiring follow-up before the data should be considered reliable for assessment use.
+
+* **Maturity workflow comparison.** The new spatiotemporal maturity workflow produces a much weaker temporal trend in the probability of terminal molt at size than the legacy workflow. Side-by-side documentation of the two workflows, an evaluation of the spatial sample sizes of chela measurements (which are sparse at many stations and many sizes), and quantification of the degrees of freedom consumed by the spatial process would help the CPT and SSC evaluate the two approaches.
+
+* **Source of bimodality in the snow crab assessment.** Although the immature survey index appears to remove the bimodal jitter signal in the May 2026 candidate models, the underlying source of multiple optima is not understood. A focused investigation of which parameter combinations produce the two clouds (e.g., recruitment in the most recent years, $M$ events, or selectivity parameters) would help clarify whether the immature index is solving a real problem or is masking it.
+
+* **Reproductive biology of large male snow crab.** As noted in 2024 and 2025 SSC comments, more research is needed on whether small males can and do mate with large females and produce progeny that will be large males under favorable environmental conditions. This question remains the central scientific uncertainty constraining management because the fishery cannot exist without large males and large males are at historical lows.
 
 # K. Supplemental information
 
-Input and output for the models described here can be found at https://github.com/szuwalski/snow_2025_9. 
+Input and output for the models described here can be found at https://github.com/szuwalski/snow_crab/tree/dev-Grant.
+
+The new maturity workflow can be found at https://github.com/eryznar/Chionoecetes.maturity.workflow.
 
 GMACS code and documentation can be found at: https://github.com/GMACS-project.
 
@@ -569,34 +648,12 @@ kable(
 ```{r,echo=FALSE,warning=FALSE,message=F}
 
 
-# keep_like_big<-NULL
-# for(y in 1:length(model_defs))
-#     {
-#       tmp<-readLines(paste(model_defs[y],"/Gmacsall.out",sep=''))
-#       if(y==1)
-#        st<-grep("Raw likelihood",tmp)
-#       if(y>1)
-#        st<-grep("Raw_likelihood",tmp)
-#       keep_like<-NULL
-#       for(z in 1:(length(st)-1))
-#       {
-#         bleh<-unlist(strsplit(tmp[st[z]],split=' '))
-#        if(y>1)
-#         keep_like<-c(keep_like,round(as.numeric(bleh[3:length(bleh)]),2))
-#        if(y==1)
-#         keep_like<-c(keep_like,round(as.numeric(bleh[4:length(bleh)]),2))
-#       }
-#       keep_like_big<-cbind(keep_like_big,keep_like)
-# }
-# 
-# colnames(keep_like_big) = colnames(model_defs)
-# rownames(keep_like_big) <- c("Retained","Discard (male)","Discard (female)","Non-directed",
-#                             "NMFS 1982-89 (m)","NMFS 1989-present(m)","NMFS 1982-88 (f)","NMFS 1989-present (f)",
-#                             "Retained SC","Total SC","Discard SC (f)","Bycatch SC (f)","Bycatch SC (m)",
-#                             "NMFS 1982-89 (imm m)","NMFS 1989-present(imm m)","NMFS 1982-88 (imm f)","NMFS 1989-present (imm f)",
-#                             "NMFS 1982-89 (mat m)","NMFS 1989-present(mat m)","NMFS 1982-88 (mat f)","NMFS 1989-present (mat f)",
-#                             "Growth","")
-#  kable(keep_like_big[-nrow(keep_like_big),],split.cells=c(25,rep(12,5)),justify=c("left",rep("center",5)),caption="\\label{like_ind}Individual likelihood components by model.")
+# NOTE: The legacy keep_like_big block (individual likelihood components by
+# fleet) was removed during the May 2026 review. The aggregate likelihood table
+# in the previous chunk (`like_comp_tot`) supersedes it for this cycle. If
+# individual fleet-level likelihoods are needed for September, re-implement
+# using `wtsGMACS::extractRep1Results(reslst, "Likelihoods_by_fleet")` so the
+# extraction stays consistent with the rest of the document.
 
 
 ```
@@ -729,8 +786,6 @@ kable(
 
 \newpage
 
-\newpage
-
 ```{r,echo=FALSE,warning=FALSE,message=F}
 # --- 1. Extract Weight and Results ---
 # Direct indexing instead of eval(parse)
@@ -761,7 +816,7 @@ n_females_mat <- extract_gmacs_df(gmacs_lines, "N(females_mature): dataframe")
 # --- 3. Extract Selectivity ---
 dfrSel <- wtsGMACS::extractRep1Results(reslst, "selfcns") |> 
   dplyr::filter(type == "capture", fleet == "NMFS_Trawl_1989", 
-                case == report_model, sex == 'male', year == 2023)
+                case == names(report_model), sex == 'male', year == 2023)
 
 # Ensure selectivity vector length matches size classes (22)
 male_sel <- dfrSel |> 
@@ -829,7 +884,6 @@ pander::pander(
 )
 
 ```
-
 
 \newpage
 
@@ -929,29 +983,32 @@ pander::pander(
 
 
 
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{jitter}Directed OFLs resulting from 100 jitter runs for the model using morphometrically mature crab as currency."}
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{jitter}Directed OFLs resulting from 100 jitter runs for the models that span the structural and data choices presented in this document. Each point is a converged jitter run; clouds separated vertically reflect alternative local optima."}
 
-
-#include_graphics("plots/jittered_ofl.png")
-
+# Drop the jitter PNG into plots/jittered_ofl.png (produced by 03_jittering_parallel.R).
+# If the file is not yet present, the chunk renders nothing but does not break the build.
+jitter_ofl_png <- "plots/jittered_ofl.png"
+if (file.exists(jitter_ofl_png)) {
+  knitr::include_graphics(jitter_ofl_png)
+} else {
+  cat("*Jitter OFL figure not yet generated; see `03_jittering_parallel.R` to produce `plots/jittered_ofl.png`.*")
+}
 ```
 
 \newpage
 
 
-\newpage
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{jitt_rec}Estimated recruitment time series from two jitter runs drawn from different 'clouds' of the previous plot."}
 
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{jitt_rec}Estimated recruitment time series from two jitters runs from different 'clouds' of the previous plot."}
-
-
-#include_graphics("plots/jitter_rec.png")
-
+jitter_rec_png <- "plots/jitter_rec.png"
+if (file.exists(jitter_rec_png)) {
+  knitr::include_graphics(jitter_rec_png)
+} else {
+  cat("*Jitter recruitment figure not yet generated; see `03_jittering_parallel.R` to produce `plots/jitter_rec.png`.*")
+}
 ```
 
-
-
 \newpage
-
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.width=8.5,fig.height=8,fig.cap="\\label{mmbfits}Model fits to the observed mature biomass at survey."}
 
@@ -1030,10 +1087,6 @@ print(p_idx_final)
 
 \newpage
 
-
-
-\newpage
-
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.width=8,fig.height=6,fig.cap="\\label{growthfits}Model fits (colored lines) to the growth data (dots). Black dots are historical observations; red dots are new data for 2025."}
 
 
@@ -1047,8 +1100,6 @@ ggplot(dfrMnGr)+
 
 #==add data
 ```
-
-
 
 \newpage
 
@@ -1131,26 +1182,31 @@ print(p_catch)
 
 ```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%"}
 
-# 1. Get a list of all comp plots in the directory
+# 1. Get a list of all comp plots and sort by the numeric ID embedded in the
+#    filename (e.g. size_comp_plot_5_... should come before _10_...).
 img_folder <- "plots"
-img_files <- list.files(path = img_folder, pattern = "size_comp_plot", full.names = TRUE)
+img_files  <- list.files(path = img_folder, pattern = "^size_comp_plot_", full.names = TRUE)
+
+# Extract the numeric ID after "size_comp_plot_" for proper ordering
+ids        <- as.numeric(sub("^size_comp_plot_(\\d+)_.*$", "\\1", basename(img_files)))
+img_files  <- img_files[order(ids)]
+
+# Build a clean caption from the filename (strip prefix, id, and extension; replace _ with space)
+make_caption <- function(f) {
+  base <- tools::file_path_sans_ext(basename(f))
+  desc <- sub("^size_comp_plot_\\d+_", "", base)
+  desc <- gsub("_", " ", desc)
+  paste0("Model fits (lines) to size composition data (grey bars): ", desc, ".")
+}
 
 # 2. Loop through each file and include it on a new page
 for (f in img_files) {
-  # Insert the image using Markdown syntax
-  cat(paste0("![Model fits (lines) to size composition data (grey bars)](", f, ")\n\n"))
-  
-  # Insert a page break (different syntax for PDF vs HTML)
-  # For PDF output:
+  cat(paste0("![", make_caption(f), "](", f, ")\n\n"))
   cat("\\newpage \n")
 }
 
 
 ```
-
-\newpage
-
-
 
 \newpage
 
@@ -1203,8 +1259,6 @@ print(large_males2)
 
 ```
 
-
-
 \newpage
 
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.height=10,fig.width=7,fig.cap="\\label{select_prior}Estimated survey selectivity (lines) with normal priors derived from BSFRF selectivity experiment data. Points are the mean of the prior at a given size; intervals are 95th quantiles based on input CVs. "}
@@ -1215,7 +1269,7 @@ zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
 nZBs = length(zBs);
 dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |> 
   dplyr::filter(type=="capture",
-                fleet %in% c("NMFS_Trawl_1982 ","NMFS_Trawl_1989")) |>
+                fleet %in% c("NMFS_Trawl_1982", "NMFS_Trawl_1989")) |>
   tidyr::pivot_longer(cols=4+(1:nZBs),names_to="size",values_to="est") |>
   dplyr::mutate(dplyr::across(c(2,6,7),as.numeric)); 
 
@@ -1237,8 +1291,6 @@ print(p)
 
 
 ```
-
-
 
 \newpage
 
@@ -1464,9 +1516,11 @@ p_nat_m <- ggplot(dfrMbyXM_plot, aes(x = year, y = M_value, color = Model, group
   # Model Estimates
   geom_line(lwd = 1.1, alpha = 0.7) +
   geom_point(size = 2, alpha = 0.8) +
-  # Focus on the 2018-2019 mortality event window
-  coord_cartesian(xlim = c(2015, 2022), ylim = c(0, 5)) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  # Focus on the 2018-2019 mortality event window; allow the immature-index
+  # model's elevated mature-male M to be visible (let ggplot pick the upper
+  # limit from the data rather than clipping at 5).
+  coord_cartesian(xlim = c(2015, 2022)) +
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
   theme_bw() +
   labs(
     title = "Estimated Natural Mortality (M)",
