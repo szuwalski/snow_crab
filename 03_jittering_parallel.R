@@ -11,9 +11,9 @@ cl <- parallel::makeCluster(use_cores)
 doParallel::registerDoParallel(cl)
 
 # Define scenarios (using your requested snow/gmacs replacement logic)
-orig_drv <- c("25_gmacs_update_hyb_surv_and_fsh_newmat", 
-              "25_gmacs_update_hyb_surv_and_fsh", 
-              "25_gmacs_update_plus_group", 
+orig_drv <- c("25_gmacs_update_hyb_surv_and_fsh_newmat",
+              "25_gmacs_update_hyb_surv_and_fsh",
+              "25_gmacs_update_plus_group",
               "25_gmacs_update_newmat_plus_group",
               "25_gmacs_update_imm_plus_group",
               "25_gmacs_update_newmat_imm_plus_group")
@@ -21,6 +21,59 @@ orig_drv <- c("25_gmacs_update_hyb_surv_and_fsh_newmat",
 tot_it  <- 100
 orig_wd <- getwd()
 
+# --- 1b. Platform / Wine (Whisky) configuration ---------------------------
+# gmacs.exe was compiled for Windows. On macOS we run it through Whisky's
+# bundled Wine. Set these two paths once for your machine and the parallel
+# loop below will dispatch the executable correctly. On Windows the script
+# falls back to the original `cmd /c` invocation.
+is_mac <- Sys.info()[["sysname"]] == "Darwin"
+
+# Path to the wine64 binary that Whisky ships with. The default below is the
+# standard install location for recent Whisky releases; adjust if yours is
+# different (Whisky -> right-click bottle -> "Open Bottle Folder" will reveal
+# the prefix and a sibling Wine binary path).
+whisky_wine <- "~/Library/Application Support/com.isaacmarovitz.Whisky/Libraries/Wine/bin/wine64"
+
+# WINEPREFIX for the Whisky bottle that has the right Windows libraries
+# installed. Find the UUID at:
+#   ~/Library/Containers/com.isaacmarovitz.Whisky/Bottles/<UUID>/
+# (Whisky -> bottle list -> three-dot menu -> "Show in Finder" works too.)
+whisky_prefix <- "~/Library/Containers/com.isaacmarovitz.Whisky/Bottles/AD8FC922-1B19-4B6C-92DB-A4699F0AC94B"
+
+# Validate before launching the parallel cluster (cheaper to fail here)
+if (is_mac) {
+  if (!file.exists(path.expand(whisky_wine))) {
+    stop("Whisky wine binary not found at: ", whisky_wine,
+         "\nUpdate `whisky_wine` at the top of this script.")
+  }
+  if (!dir.exists(path.expand(whisky_prefix))) {
+    stop("Whisky bottle prefix not found at: ", whisky_prefix,
+         "\nUpdate `whisky_prefix` at the top of this script with your bottle's UUID.")
+  }
+}
+
+# --- 1c. Per-worker wine prefix slots (macOS only) -------------------------
+# Concurrent wine instances that share one WINEPREFIX deadlock each other via
+# the wineserver. Create one APFS copy-on-write clone per worker slot
+# (one-time, cheap on APFS); each worker claims its slot exclusively so all
+# parallel runs proceed without conflict.
+if (is_mac) {
+  slot_dir <- file.path(orig_wd, ".wine_slots")
+  dir.create(slot_dir, showWarnings = FALSE, recursive = TRUE)
+  for (s in seq_len(use_cores)) {
+    slot_path <- file.path(slot_dir, paste0("slot_", s))
+    if (!dir.exists(slot_path)) {
+      message("Creating wine prefix slot ", s, " (one-time APFS clone)...")
+      system2("cp", args = c("-Rc", path.expand(whisky_prefix), slot_path))
+    }
+  }
+  # Assign each persistent doParallel worker a unique slot ID (1..use_cores).
+  # Workers survive across foreach iterations, so worker N always uses slot N
+  # and no two workers ever share a prefix.
+  parallel::clusterApply(cl, seq_len(use_cores), function(slot_id) {
+    assign(".wine_slot", slot_id, envir = .GlobalEnv)
+  })
+}
 
 # --- 2. Jittering Execution ----
 for(d in 1:length(orig_drv)) {
@@ -31,8 +84,11 @@ for(d in 1:length(orig_drv)) {
   
   message("Starting jitter for: ", current_scenario)
   
-  # Parallel loop for iterations
-  foreach(i = 1:tot_it) %dopar% {
+  # Parallel loop for iterations.
+  # `.export` ships the platform/Whisky variables to each worker so the
+  # `is_mac` branch inside the worker resolves correctly under doParallel.
+  foreach(i = 1:tot_it,
+          .export = c("is_mac", "whisky_wine", "orig_wd")) %dopar% {
   # for(i in 1:tot_it){
     work_dir <- file.path(jitter_root, as.character(i))
     if (!dir.exists(work_dir)) dir.create(work_dir)
@@ -59,11 +115,27 @@ for(d in 1:length(orig_drv)) {
     if(length(jitter_idx) > 0) in_proj[jitter_idx + 1] <- "1 0 0.1"
     writeLines(in_proj, gmacs_dat_path)
     
-    # Run assessment using shell/system call
-    # Using 'shell' on Windows or 'system' on Unix; cd into dir first
+    # Run assessment using shell/system call.
+    # On Windows: cmd /c with cd /d.
+    # On macOS:   /bin/sh -c with `cd ... && WINEPREFIX=... wine64 gmacs.exe ...`
+    #             so each parallel worker gets its own working directory and
+    #             logs are captured into the per-iteration folder.
     gc()
-    args <- c("/c", paste0("cd /d ", work_dir, " && gmacs -nohess -verbose 0 -nox > gmacs_log.txt 2>&1"))
-    system2("cmd", args = args, wait = TRUE)
+    if (is_mac) {
+      slot_prefix <- file.path(orig_wd, ".wine_slots",
+                               paste0("slot_", .wine_slot))
+      shell_cmd <- sprintf(
+        "cd %s && WINEPREFIX=%s WINEDEBUG=-all %s gmacs.exe -nohess -verbose 0 -nox > gmacs_log.txt 2>&1",
+        shQuote(normalizePath(work_dir)),
+        shQuote(slot_prefix),
+        shQuote(path.expand(whisky_wine))
+      )
+      system2("/bin/sh", args = c("-c", shell_cmd), wait = TRUE)
+    } else {
+      args <- c("/c", paste0("cd /d ", shQuote(work_dir),
+                             " && gmacs -nohess -verbose 0 -nox > gmacs_log.txt 2>&1"))
+      system2("cmd", args = args, wait = TRUE)
+    }
     gc()
   }
 }

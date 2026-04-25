@@ -1,0 +1,3 @@
+wineserver: using server-side synchronization.
+ Error trying to read in model data 
+ This is usual caused by a missing DAT file 
