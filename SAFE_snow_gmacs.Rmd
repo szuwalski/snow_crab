@@ -3,7 +3,10 @@ title: "Preliminary 2026 assessment for eastern Bering Sea snow crab"
 author: "Grant Adams and Cody Szuwalski"
 date: "May 2026"
 output:
-  word_document:
+  officedown::rdocx_document:
+    base_format: bookdown::word_document2
+    number_sections: false
+    fig_caption: true
     toc: true
   bookdown::pdf_document2:
     fig_caption: true
@@ -11,10 +14,7 @@ output:
     fig_width: 6
     number_sections: false
     toc: true
-  officedown::rdocx_document:
-    base_format: bookdown::word_document2
-    number_sections: false
-    fig_caption: true
+  word_document:
     toc: true
 header-includes:
 - \usepackage{geometry}
@@ -93,11 +93,11 @@ source("0-models.R") # Load model definitions
 # Case selection
 case_for_resids     <- "25.1 gmacs (update + plus group)" # model print size comp residuals for
 case_for_data_table <- c("25.1 gmacs (update + plus group)", "25.1 gmacs (update + hyb_both)")
-report_model <- model_defs[6]
+report_model <- model_defs[7]
 
 
 # Global Switches
-do_size_comps  <- 1 # Set to 1 to regenerate PNGs (can take time)
+do_size_comps  <- 0 # Set to 1 to regenerate PNGs (can take time)
 do_proj        <- 0 # Set to 1 to process projection files
 make_proj_fig  <- 0 # Set to 1 to generate projection plots
 
@@ -362,8 +362,6 @@ A series of incremental data and structural fixes:
 
 * **25.1 gmacs (update + compfix)** -- as 'update', but the total male composition data was updated to correct a small discrepancy between the file used in September 2025 and the version produced by the script. 
 
-@Cody, add why?
-
 * **25.1 gmacs (update + plus group)** -- as 'update', but the plus group is enlarged to include all crab greater than 135 mm carapace width (the previous model ignored all crab larger than 135 mm) for the retained male, total male, and discard female composition data. This model ran substantially faster (23 min, 9 sec) than the 'update' model (29 min, 2 sec) and provides the basis for several of the sensitivities below.
 
 * **25.1 gmacs (update + imm_surv + compfix)** and **25.1 gmacs (update + imm_surv + plus group)** -- as 'compfix' and 'plus group', respectively, but with an immature survey index of biomass added. The immature index provides direct information on the abundance of immature crab and was found to remove the bimodality observed in jitter analyses (see Results).
@@ -408,20 +406,22 @@ Models were evaluated based on their fit to the data, evidence of non-convergenc
 
 # E. Results
 ### Model convergence and comparison
-All `r length(model_defs)` models presented here inverted their Hessians, but most did not meet the conventional convergence threshold of a maximum absolute gradient < 0.001 (Table \@ref(tab:max-grad)). Only '25.1 gmacs (update + imm_surv + compfix)' fell below that threshold; the remaining 13 models had max |gradient| > 0.001, with '25.1 gmacs (update + hyb_both)' the largest at ~0.10. As in past cycles, jittering was used to evaluate sensitivity to starting values: parameter values were jittered based on a normal distribution centered on one with a standard deviation of 0.1, translated to the parameter space defined by the initial value and its bounds. One hundred jitters were run for six models that span the range of structural and data choices -- '25.1 gmacs (update + plus group)', '25.1 gmacs (update + new_mat + plus group)', '25.1 gmacs (update + hyb_both)', '25.1 gmacs (update + hyb_both + new_mat)', '25.1 gmacs (update + imm_surv + plus group)', and '25.1 gmacs (update + newmat + imm_surv + plus group)'. Likelihood components by category for each candidate model are summarized in Table \@ref(tab:like-comp-tot).
+All `r length(model_defs)` models presented here inverted their Hessians, but most did not meet the conventional convergence threshold of a maximum absolute gradient < 0.001 (Table \@ref(tab:max-grad)). Only '25.1 gmacs (update + imm_surv + compfix)' fell below that threshold; the remaining 13 models had max |gradient| > 0.001, with '25.1 gmacs (update + hyb_both)' the largest at ~0.10. 
 
-The bimodality in management quantities reported in the 2025 preliminary and final assessments persists in most of the 2026 candidate models that do *not* include the immature survey index, with two distinct clouds of converged OFLs separated by ~50--100 negative-log-likelihood units and OFLs that differ by several thousand tonnes (Figure \@ref(fig:jitter)). The bimodality is also visible in the corresponding estimates of 2024 male recruitment (Figure \@ref(fig:jitt-rec)) and 2024 MMB (Figure \@ref(fig:jitt-ssb)). Adding the immature survey index alongside the updated plus group ('25.1 gmacs (update + imm_surv + plus group)') eliminates the bimodality entirely -- jitter runs converge to a single cloud of solutions (Figure \@ref(fig:jitter)). This is an encouraging diagnostic, but the immature-index model also produces a substantially smaller $B_{MSY}$ and a much higher mature male natural mortality (see below), so the apparent fix should not be interpreted as an unqualified improvement. The recent history of bimodality in this assessment (Turnock, 2016) suggests that resolving the underlying source of multiple optima will require further evaluation before September.
+As in past cycles, jittering was used to evaluate sensitivity to starting values: parameter values were jittered based on a normal distribution centered on one with a standard deviation of 0.1, translated to the parameter space defined by the initial value and its bounds. One hundred jitters were run for six models that span the range of structural and data choices -- '25.1 gmacs (update + plus group)', '25.1 gmacs (update + new_mat + plus group)', '25.1 gmacs (update + hyb_both)', '25.1 gmacs (update + hyb_both + new_mat)', '25.1 gmacs (update + imm_surv + plus group)', and '25.1 gmacs (update + newmat + imm_surv + plus group)'. Likelihood components by category for each candidate model are summarized in Table \@ref(tab:like-comp-tot).
 
-All of the data-update candidate models (i.e., every model that incorporates the 2025 NMFS summer survey, regardless of plus group, comp-fix, hybrid, or maturity treatment) continue to have difficulty fitting the terminal year of female biomass. Inputting a yearly varying probability of terminal molt from the new maturity workflow ('new_mat' models) shifts the estimated population dynamics modestly but does not resolve the female terminal-year fit.
+The bimodality in management quantities reported in the 2025 preliminary and final assessments persists in most of the 2026 candidate models. With a range of converged OFLs separated by < 10 negative-log-likelihood units and OFLs that differ by several thousand tonnes (Figure \@ref(fig:jitter)). There is a clear bimodality also visible in the corresponding estimates of 2024 male recruitment (Figure \@ref(fig:jitt-rec)) and 2024 MMB (Figure \@ref(fig:jitt-ssb)). Adding the immature survey index alongside the updated plus group ('25.1 gmacs (update + imm_surv + plus group)') and new maturity ('25.1 gmacs (update + imm_surv + newmat + plus group)') eliminates the bimodality, but there is a clear spead in derived quantities within 10 negative-log-likelihood units (Figure \@ref(fig:jitter)). This is an encouraging diagnostic, but there is still large uncertainty across MMB and male recruitment in 2024, so the apparent fix should not be interpreted as an unqualified improvement. The recent history of bimodality in this assessment, suggests that resolving the underlying source of multiple optima will require further evaluation before September.
 
 ### Model fits
-Fits to the survey indices of mature biomass were broadly similar across the models (Figure \@ref(fig:mmbfits)). The hybrid-survey models produce visibly higher predicted survey biomass in some years (the additional hybrid biomass is added to the snow-crab time-series), but the trend through time is unchanged. The models with the immature survey index ('imm_surv') fit the new immature index well in recent years.
+Fits to the survey indices of mature biomass were broadly similar across the models (Figure \@ref(fig:mmbfits)). All of the data-update candidate models (i.e., every model that incorporates the 2025 NMFS summer survey, regardless of plus group, comp-fix, hybrid, or maturity treatment) continue to have difficulty fitting the terminal year of female biomass. Inputting a yearly varying probability of terminal molt from the new maturity workflow ('new_mat' models) shifts the estimated population dynamics modestly but does not resolve the female terminal-year fit (Figure \@ref(fig:mmbfits)).
+
+The hybrid-survey models produce visibly higher predicted survey biomass in some years (the additional hybrid biomass is added to the snow-crab time-series), but the trend through time is unchanged. The models with the immature survey index ('imm_surv') fit the new immature index well in recent years.
 
 Fits to the non-directed fishery catches were good for all models (Figure \@ref(fig:catchfits)). Fits to the directed-fishery retained catch were also good across the model set. Fits to the directed-fishery discard time-series differ in the hybrid-fishery models because the observed discards in those models include hybrid crab (and so are larger; e.g., ~18 kt of legal-male hybrid catch in 1997 reported by ADF&G with the caveat that observer hybrid identification quality decreases further back in the time-series; Table \@ref(tab:obscatch)). The models accommodate the additional discards primarily through changes in estimated discard fishing mortality rather than through major changes in selectivity.
 
 Differences among models in the fits to size composition data for retained catch in the directed fishery are small (size composition figures, below). Fits to the total size composition data from the directed fishery differ noticeably between the standard and the hybrid-fishery models, particularly for the larger size bins where hybrids are most prevalent. No visually discernible differences among models existed for female discards from the directed fishery. Fits to the non-directed fishery had some of the largest misfits of all data sources (particularly for male data), but this is unsurprising given a single estimated selectivity curve and changes in fishery behavior over time.
 
-Fits to the survey size composition data were broadly similar across models in most years (size composition figures, below). The plus-group change (extending the plus group to all crab > 135 mm) makes a small visual difference for retained males but improves the runtime of the model substantially. All models had difficulty fitting the size composition data for mature males immediately after the early-1990s collapse, which could suggest some unmodelled size-based mortality. Fits to the mean growth data are shown in Figure \@ref(fig:growthfits).
+Fits to the survey size composition data were broadly similar across models in most years (size composition figures, below). The plus-group change (extending the plus group to all crab > 135 mm) makes a small visual difference for retained males but improves the runtime of the model substantially. All models had difficulty fitting the size composition data for immature females in 2009 and 2019, which could suggest some unmodelled size-based mortality. Estimates of mean growth are shown in Figure \@ref(fig:growthfits).
 
 ### Estimated population processes
 The estimated abundance of commercially preferred male crab (>=101 mm carapace width) varied among models (Figure \@ref(fig:obs-101-vs-pred)). The early years during which differences in survey selectivity occurred were particularly different. All models agreed that the abundance in recent years has been the lowest in the time series. The estimates of the most recent era of survey selectivity were similar across models for both sexes (Figure \@ref(fig:select-prior)).
@@ -654,7 +654,7 @@ extract_likelihoods <- function(path) {
 
 # Apply the function to all models in model_defs
 tot_likes <- lapply(model_defs, extract_likelihoods)
-tot_likes <- tot_likes %>% purrr::reduce(full_join)
+tot_likes <- tot_likes %>% purrr::reduce(dplyr::full_join)
 
 # Format for the table
 tot_likes$Object[1:5] <- c("Catch", "Index", "Size", "SRR", "Tag")
@@ -1278,23 +1278,6 @@ print(p_imm_final)
 \elandscape
 \newpage
 
-```{r growthfits, echo=FALSE, warning=FALSE, message=F, fig.width=8, fig.height=6, fig.cap="Model fits (colored lines) to the growth data (dots). Black dots are historical observations; red dots are new data for 2025."}
-
-
-dfrMnGr = wtsGMACS::extractRep1Results(reslst,"Mean growth") |>
-  dplyr::mutate(dplyr::across(3:5,as.numeric)) |>
-  dplyr::mutate(case = to_short(case));
-
-ggplot(dfrMnGr)+
-  geom_line(aes(x=premolt_size,y=mean_increment,col=case))+
-  facet_wrap(~sex)+
-  labs(col = "Model") +
-  theme_bw()
-
-#==add data
-```
-
-\newpage
 
 ```{r catchfits, echo=FALSE, warning=FALSE, message=F, fig.width=8, fig.height=8, fig.cap="Model fits to catch data."}
 
@@ -1369,6 +1352,23 @@ p_catch <- ggplot() +
 
 print(p_catch)
 
+```
+\newpage
+
+```{r growthfits, echo=FALSE, warning=FALSE, message=F, fig.width=8, fig.height=6, fig.cap="Model fits (colored lines) to the growth data (dots). Black dots are historical observations; red dots are new data for 2025."}
+
+
+dfrMnGr = wtsGMACS::extractRep1Results(reslst,"Mean growth") |>
+  dplyr::mutate(dplyr::across(3:5,as.numeric)) |>
+  dplyr::mutate(case = to_short(case));
+
+ggplot(dfrMnGr)+
+  geom_line(aes(x=premolt_size,y=mean_increment,col=case))+
+  facet_wrap(~sex)+
+  labs(col = "Model") +
+  theme_bw()
+
+#==add data
 ```
 
 \newpage
@@ -1473,42 +1473,6 @@ print(large_males_bio)
 
 \newpage
 
-@cody, check MMA units
-```{r predmmb, echo=FALSE, warning=FALSE, message=FALSE, eval = TRUE, fig.height=8, fig.width=8, fig.cap="Model predicted mature male biomass (1,000 tonnes) and abundance at mating time."}
-#=========================================================
-#  Plot derived quantities
-#=========================================================
-
-dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |>
-  dplyr::select(case, year, SSB, SSA) |>
-  dplyr::rename(MMB = SSB,
-                MMA = SSA) |>
-  # Coerce only the numeric columns (the previous `across(everything())`
-  # silently turned `case` into NA via as.numeric on the model labels).
-  dplyr::mutate(across(c(year, MMB, MMA), as.numeric)) |>
-  dplyr::mutate(case = to_short(case)) |>
-  tidyr::pivot_longer(cols = c(MMB, MMA),
-                       names_to = "metric",
-                       values_to = "value") |>
-   dplyr::mutate(metric = dplyr::recode(metric,
-                                        BIO = "Biomass (1,000 t)",
-                                        ABN = "Abundance"))
-
-#==add reference points back in
-ggplot(dfr)+
-  geom_line(aes(x = year,y = value, col = case)) +
-  labs(col="Model", x="Year", y="MMB (1,000 t)") +
-  facet_wrap(~ metric, ncol = 1, scales = "free_y") +
-  theme(legend.position = 'bottom',
-         strip.background = element_rect(fill = "white")) +
-  theme_bw() +
-  labs(x = "Year", y = NULL, color = "Model") +
-  expand_limits(y=0)
-
-```
-
-
-\newpage
 
 ```{r select-prior, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=6.5, fig.cap="Estimated survey selectivity (lines) with normal priors derived from BSFRF selectivity experiment data. Points are the mean of the prior at a given size; intervals are 95th quantiles based on input CVs."}
 
@@ -1543,6 +1507,8 @@ print(p)
 ```
 
 \newpage
+\blandscape
+<!---BLOCK_LANDSCAPE_START--->
 
 ```{r predselectfish, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=8, fig.cap="Estimated selectivities by fishing fleet and sex for capture and retained catches."}
 
@@ -1567,10 +1533,9 @@ p <- ggplot(fish_mdf) + expand_limits(y = c(0,1))+
   facet_wrap(~fleet+sex)+theme_bw()+theme(legend.position='bottom')
 
 print(p)
-
-
 ```
-
+<!---BLOCK_LANDSCAPE_STOP--->
+\elandscape
 \newpage
 
 ```{r predfmort, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=6.5, fig.cap="Estimated fishing mortalities for the directed and non-directed fisheries."}
@@ -1798,9 +1763,43 @@ p_nat_m <- ggplot(dfrMbyXM_plot, aes(x = year, y = M_value, color = Model, group
 # Render the plot
 print(p_nat_m)
 
+```
 
+\newpage
+
+```{r predmmb, echo=FALSE, warning=FALSE, message=FALSE, eval = TRUE, fig.height=8, fig.width=8, fig.cap="Model predicted mature male biomass (1,000 tonnes) and abundance at mating time."}
+#=========================================================
+#  Plot derived quantities
+#=========================================================
+
+dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |>
+  dplyr::select(case, year, SSB, SSA) |>
+  dplyr::rename(MMB = SSB,
+                MMA = SSA) |>
+  # Coerce only the numeric columns (the previous `across(everything())`
+  # silently turned `case` into NA via as.numeric on the model labels).
+  dplyr::mutate(across(c(year, MMB, MMA), as.numeric)) |>
+  dplyr::mutate(case = to_short(case)) |>
+  tidyr::pivot_longer(cols = c(MMB, MMA),
+                       names_to = "metric",
+                       values_to = "value") |>
+   dplyr::mutate(metric = dplyr::recode(metric,
+                                        BIO = "Biomass (1,000 t)",
+                                        ABN = "Abundance"))
+
+#==add reference points back in
+ggplot(dfr)+
+  geom_line(aes(x = year,y = value, col = case)) +
+  labs(col="Model", x="Year", y="MMB (1,000 t)") +
+  facet_wrap(~ metric, ncol = 1, scales = "free_y") +
+  theme(legend.position = 'bottom',
+         strip.background = element_rect(fill = "white")) +
+  theme_bw() +
+  labs(x = "Year", y = NULL, color = "Model") +
+  expand_limits(y=0)
 
 ```
+
 
 \newpage
 
