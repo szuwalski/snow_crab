@@ -93,7 +93,7 @@ report_model <- model_defs[6]
 
 
 # Global Switches
-do_size_comps  <- 1 # Set to 1 to regenerate PNGs (can take time)
+do_size_comps  <- 0 # Set to 1 to regenerate PNGs (can take time)
 do_proj        <- 0 # Set to 1 to process projection files
 make_proj_fig  <- 0 # Set to 1 to generate projection plots
 
@@ -129,13 +129,14 @@ if(do_size_comps==1){
     curr_id <- i
     tmp     <- dfrZCs |> filter(comp_id == curr_id)
     
-    # Size Composition Plot
+    # Size Composition Plot (use shortnames in the legend)
+    tmp$case_short <- to_short(tmp$case)
     p <- ggplot(tmp) +
       geom_bar(aes(x = as.numeric(size), y = aggObs), stat = "identity", position = "identity", fill = 'lightgrey') +
-      geom_line(aes(x = as.numeric(size), y = aggPrd, col = case)) +
+      geom_line(aes(x = as.numeric(size), y = aggPrd, col = case_short)) +
       facet_wrap(~year) +
       theme_bw() +
-      labs(x = "Carapace width (mm)", y = "Proportion", 
+      labs(x = "Carapace width (mm)", y = "Proportion", col = "Model",
            title = paste(tmp$fleet[1], tmp$sex[1], tmp$comp_type[1], tmp$maturity[1], tmp$maturity_ogive[1],  sep = " / "))
     
     compname <- paste(tmp$fleet[1], tmp$sex[1], tmp$comp_type[1], tmp$maturity[1], tmp$maturity_ogive[1], sep = "_")
@@ -657,7 +658,7 @@ tot_likes <- tot_likes[c(1:8, 10:11, 9),]
 tot_likes[is.na(tot_likes)] <- 0
 rownames(tot_likes) <- tot_likes$Object
 tot_likes <- tot_likes[,-1]
-colnames(tot_likes) <- names(model_defs)
+colnames(tot_likes) <- as.character(to_short(names(model_defs)))
 
 # Use kable to render, excluding row 8 as in your original snippet
 kable(
@@ -691,9 +692,12 @@ kable(
 ```{r,echo=FALSE,warning=FALSE,message=F, eval=FALSE}
 # Turning off
 # Extract and pivot estimated parameters
-# 'estimate' is the standard column name for the parameter value in dfrPars
+# 'estimate' is the standard column name for the parameter value in dfrPars.
+# Convert long case labels to shortnames *before* pivoting so the column
+# headers in the table are compact.
 est_pars <- reslst$dfrPars %>%
   dplyr::select(param, case, value) %>%
+  dplyr::mutate(case = as.character(to_short(case))) %>%
   tidyr::pivot_wider(names_from = case, values_from = value) %>%
   # Automatically round all columns to 2 decimal places
   dplyr::mutate(across(where(is.numeric), ~round(.x, 2)))
@@ -800,8 +804,9 @@ extract_mgmt_quantities <- function(path, model_name) {
 }
 
 # Iterate over all models and combine results
-ref_table <- names(model_defs) |> 
-  purrr::map_dfr(~extract_mgmt_quantities(model_defs[.x], .x)) |> 
+ref_table <- names(model_defs) |>
+  purrr::map_dfr(~extract_mgmt_quantities(model_defs[.x], .x)) |>
+  dplyr::mutate(Model = as.character(to_short(Model))) |>
   dplyr::select(Model, everything()) # Reorder to put Model first
 
 # Render table
@@ -991,15 +996,15 @@ fm_all <- case_for_data_table |>
 
 # --- 3. Join and Format for Comparison ---
 # Use a join to ensure the FM and MMB align correctly for every model
-sum_mat <- summary_all |> 
-  dplyr::inner_join(fm_all, by = c("case", "year")) |> 
+sum_mat <- summary_all |>
+  dplyr::inner_join(fm_all, by = c("case", "year")) |>
   dplyr::transmute(
-    Model                 = case,
+    Model                 = as.character(to_short(case)),
     `Survey Year`         = year,
     `Mature Male Biomass` = round(as.numeric(SSB), 2),
     `Male Recruits`       = round(as.numeric(rec_male) / 1e6, 2), # Billions
     `Fishing Mortality`   = round(f_mort, 2)
-  ) |> 
+  ) |>
   dplyr::arrange(Model, `Survey Year`)
 
 # --- 4. Render Table ---
@@ -1019,24 +1024,37 @@ pander::pander(
 
 # Drop the jitter PNG into plots/jittered_ofl.png (produced by 03_jittering_parallel.R).
 # If the file is not yet present, the chunk renders nothing but does not break the build.
-jitter_ofl_png <- "plots/jittered_ofl.png"
+jitter_ofl_png <- "plots/jittered_results_ofl.png"
 if (file.exists(jitter_ofl_png)) {
   knitr::include_graphics(jitter_ofl_png)
 } else {
-  cat("*Jitter OFL figure not yet generated; see `03_jittering_parallel.R` to produce `plots/jittered_ofl.png`.*")
+  cat("*Jitter OFL figure not yet generated; see `03_jittering_parallel.R` to produce `plots/jittered_results_ofl.png`.*")
 }
 ```
 
 \newpage
 
 
-```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{jitt_rec}Estimated recruitment time series from two jitter runs drawn from different 'clouds' of the previous plot."}
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{jitt_rec}Estimates of male recruitment in 2024 resulting from 100 jitter runs for the models that span the structural and data choices presented in this document. Each point is a converged jitter run; clouds separated vertically reflect alternative local optima."}
 
-jitter_rec_png <- "plots/jitter_rec.png"
+jitter_rec_png <- "plots/jittered_results_rec.png"
 if (file.exists(jitter_rec_png)) {
   knitr::include_graphics(jitter_rec_png)
 } else {
-  cat("*Jitter recruitment figure not yet generated; see `03_jittering_parallel.R` to produce `plots/jitter_rec.png`.*")
+  cat("*Jitter recruitment figure not yet generated; see `03_jittering_parallel.R` to produce `plots/jittered_results_rec.png`.*")
+}
+```
+
+\newpage
+
+
+```{r,echo=FALSE,warning=FALSE,message=F,out.width="100%",fig.cap="\\label{jitt_rec}Estimates of MSB in 2024 resulting from 100 jitter runs for the models that span the structural and data choices presented in this document. Each point is a converged jitter run; clouds separated vertically reflect alternative local optima."}
+
+jitter_rec_png <- "plots/jittered_results_ssb.png"
+if (file.exists(jitter_rec_png)) {
+  knitr::include_graphics(jitter_rec_png)
+} else {
+  cat("*Jitter ssb figure not yet generated; see `03_jittering_parallel.R` to produce `plots/jittered_results_ssb.png`.*")
 }
 ```
 
@@ -1057,13 +1075,15 @@ dfrIndxFit_plot <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |>
     model     = case
   ) |> 
   dplyr::mutate(
-    # Categorize models into Hybrid vs Standard based on name
-    hybrid_status = ifelse(grepl("hyb_surv|hyb_both", model, ignore.case = TRUE), 
-                           "Hybrid Included", 
+    # Categorize models based on the long label *before* shortening it
+    hybrid_status = ifelse(grepl("hyb_surv|hyb_both", model, ignore.case = TRUE),
+                           "Hybrid Included",
                            "Standard Survey"),
-    maturity_status = ifelse(grepl("new_mat", model, ignore.case = TRUE), 
-                           "New maturity", 
+    maturity_status = ifelse(grepl("new_mat", model, ignore.case = TRUE),
+                           "New maturity",
                            "Old maturity"),
+    # Compact shortname for the legend
+    model = to_short(model),
     # Confidence interval calculations
     sd_log = sqrt(log(1 + actual_CV^2)),
     lba    = qlnorm(0.05, log(obs), sd_log),
@@ -1131,12 +1151,14 @@ print(p_idx_final)
 ```{r,echo=FALSE,warning=FALSE,message=F,fig.width=8,fig.height=6,fig.cap="\\label{growthfits}Model fits (colored lines) to the growth data (dots). Black dots are historical observations; red dots are new data for 2025."}
 
 
-dfrMnGr = wtsGMACS::extractRep1Results(reslst,"Mean growth") |> 
-  dplyr::mutate(dplyr::across(3:5,as.numeric));
+dfrMnGr = wtsGMACS::extractRep1Results(reslst,"Mean growth") |>
+  dplyr::mutate(dplyr::across(3:5,as.numeric)) |>
+  dplyr::mutate(case = to_short(case));
 
 ggplot(dfrMnGr)+
   geom_line(aes(x=premolt_size,y=mean_increment,col=case))+
   facet_wrap(~sex)+
+  labs(col = "Model") +
   theme_bw()
 
 #==add data
@@ -1158,10 +1180,12 @@ dfrCatFit_plot <- wtsGMACS::extractRep1Results(reslst, "Catch_fit_summary") |>
     model     = case
   ) |> 
   dplyr::mutate(
-    # Identify if a model includes hybrid discards based on its name
-    hybrid_status = ifelse(grepl("hyb_both|hyb_fishery", model, ignore.case = TRUE), 
-                           "Hybrid Included", 
+    # Identify if a model includes hybrid discards based on its long name
+    hybrid_status = ifelse(grepl("hyb_both|hyb_fishery", model, ignore.case = TRUE),
+                           "Hybrid Included",
                            "Standard Data"),
+    # Compact shortname for the legend
+    model = to_short(model),
     # Create descriptive row labels for faceting
     series = dplyr::case_when(
       fleet == "Trawl_Bycatch" ~ "Non-directed Bycatch",
@@ -1280,6 +1304,9 @@ pred_101_n3<-filter(dfrN_YXMSZ,sex=='male'&size==97.5)%>%
 
 pred_101_n2$tot_ABN<-(pred_101_n2$ABN+pred_101_n3$ABN)
 
+# Shortnames for the colour legend
+pred_101_n2$case <- to_short(pred_101_n2$case)
+
 
 male_101<-EBSdata
 div_n<-1000
@@ -1317,6 +1344,7 @@ dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |>
 colnames(dfrSel)[c(5,7)]<-c("model","probability")
 plot_dat<-dfrSel[,c(5,1,2,3,4,6,7)]
 plot_dat$type[plot_dat$type=="capture"]<-"Capture"
+plot_dat$model <- to_short(plot_dat$model)
 use_sel<-filter(plot_dat,type%in%c('capture','Capture')&fleet=="NMFS_Trawl_1989")
 p <- ggplot() + expand_limits(y = c(0,1))+
   geom_line(data=use_sel,aes(x=size,y=probability,col=model,linetype=type),lwd=1.1)+
@@ -1349,6 +1377,7 @@ dfrSel = wtsGMACS::extractRep1Results(reslst,"selfcns") |>
 colnames(dfrSel)[c(5,7)]<-c("model","probability")
 plot_dat<-dfrSel
 plot_dat$type[plot_dat$type=="capture"]<-"Capture"
+plot_dat$model <- to_short(plot_dat$model)
 fish_mdf<-filter(plot_dat,fleet%in%c("Pot_Fishery","Trawl_Bycatch"))
 levels(fish_mdf$fleet)[2]<-"Non-directed bycatch"
 fish_mdf$type[fish_mdf$type=="retained"]<-"Retained"
@@ -1390,7 +1419,7 @@ dfrF_plot <- names(reslst$repsLst) |>
   })
 
 # --- 2. Clean and Filter Data for Plotting ---
-plot_dat <- dfrF_plot |> 
+plot_dat <- dfrF_plot |>
   dplyr::mutate(
     # Rename fleets for the report
     Fleet = dplyr::case_when(
@@ -1401,8 +1430,10 @@ plot_dat <- dfrF_plot |>
     # Capitalize sex for headers
     Sex = stringr::str_to_title(sex),
     # Ensure mortality values are numeric (assuming season 2 is the primary fishery)
-    F_value = as.numeric(`2`) 
-  ) |> 
+    F_value = as.numeric(`2`),
+    # Compact shortname for the legend
+    Model   = to_short(Model)
+  ) |>
   # Filter only for the primary fishing fleets
   dplyr::filter(Fleet %in% c("Directed Pot Fishery", "Non-directed Bycatch"))
 
@@ -1450,19 +1481,20 @@ plotdat_all <- case_for_data_table %>%
     # Pivot from wide to long format
     dat %>%
       tidyr::pivot_longer(
-        cols = -c(Sex, Year), 
-        names_to = "width", 
+        cols = -c(Sex, Year),
+        names_to = "width",
         values_to = "prob"
       ) %>%
       dplyr::mutate(
-        Model = case_name,
-        # Logic to separate models with "newmat"
-        Maturity_Source = ifelse(grepl("newmat", case_name, ignore.case = TRUE), 
-                                 "New Maturity Data (newmat)", 
+        # Compact shortname for the legend
+        Model = as.character(to_short(case_name)),
+        # Logic to separate models with "newmat" (uses long label for the test)
+        Maturity_Source = ifelse(grepl("newmat", case_name, ignore.case = TRUE),
+                                 "New Maturity Data (newmat)",
                                  "Standard Maturity Data"),
         width = as.numeric(as.character(width)),
         prob = as.numeric(prob),
-        # Ensure Year is a factor for discrete coloring if desired, 
+        # Ensure Year is a factor for discrete coloring if desired,
         # or keep numeric for a gradient
         Year_Fact = as.factor(Year)
       )
@@ -1516,8 +1548,10 @@ plot_dat<-rbind(dfr_f[,c(3,4,2,1)],dfr_m[,c(3,4,2,1)])
 
 plot_dat$Recruits<-as.numeric(plot_dat$Recruits)
 plot_dat$Year<-as.numeric(plot_dat$Year)
+plot_dat$model<-to_short(plot_dat$model)
 ggplot(plot_dat)+
   geom_line(aes(x=Year,y=Recruits,col=model),lwd=1.15)+
+  labs(col="Model")+
   theme_bw()+facet_wrap(~sex,ncol=1,scales='free_y')
 
 
@@ -1549,7 +1583,8 @@ dfrMbyXM_plot <- wtsGMACS::extractRep1Results(reslst, "Natural_mortality-by-clas
     # Clean up labels for the report
     Sex = stringr::str_to_title(sex),
     Maturity = stringr::str_to_title(maturity),
-    Model = case
+    # Compact shortname for the legend
+    Model = to_short(case)
   )
 
 # --- 2. Generate the Comparison Plot ---
@@ -1593,14 +1628,18 @@ print(p_nat_m)
 #  Plot derived quantities
 #=========================================================
 
-dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
-  dplyr::select(case, year, SSB) %>%
-  dplyr::rename(MMB = SSB) %>%
-  mutate(across(everything(), as.numeric))
+dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |>
+  dplyr::select(case, year, SSB) |>
+  dplyr::rename(MMB = SSB) |>
+  # Coerce only the numeric columns (the previous `across(everything())`
+  # silently turned `case` into NA via as.numeric on the model labels).
+  dplyr::mutate(across(c(year, MMB), as.numeric)) |>
+  dplyr::mutate(case = to_short(case))
 
 #==add reference points back in
 ggplot(dfr)+
   geom_line(aes(x=year,y=MMB,col=case))+
+  labs(col="Model", x="Year", y="MMB (1,000 t)")+
   theme_bw()+
   expand_limits(y=0)
 
