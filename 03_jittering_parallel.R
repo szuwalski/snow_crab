@@ -6,6 +6,7 @@
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+library(patchwork)
 source("0-models.R")
 
 # --- 1. Setup ----
@@ -130,50 +131,50 @@ jit_summary <- bind_rows(Map(
 unique(jit_summary$scenario)
 
 # --- 5. Plotting ----
-# Build a long-form dataset with two views per group: full + zoomed to within
-# 10 NLL of the per-model minimum. Plotted as a 2-row facet_grid (view x model).
-view_levels <- c("All points", "Within 10 NLL of min")
+# Each plot stacks two rows via patchwork so the rows can use different x-axes:
+#   top    = all points,       x = absolute NLL
+#   bottom = within 10 of min, x = delta-NLL (per-model)
 jit_views <- jit_summary %>%
   filter(negloglike < 0) %>%
   group_by(model) %>%
   mutate(dnll = negloglike - min(negloglike, na.rm = TRUE)) %>%
   ungroup()
 
-jit_plot_df <- bind_rows(
-  jit_views %>% mutate(view = view_levels[1]),
-  jit_views %>% filter(dnll <= 10) %>% mutate(view = view_levels[2])
-) %>%
-  mutate(view = factor(view, levels = view_levels))
+make_jitter_panels <- function(yvar, ylab, group_var) {
+  p_full <- ggplot(jit_views,
+                   aes(x = negloglike, y = .data[[yvar]],
+                       color = .data[[group_var]])) +
+    geom_point(alpha = 0.6) +
+    facet_wrap(vars(.data[[group_var]]), nrow = 1) +
+    theme_bw() +
+    labs(x = "Negative Log-Likelihood", y = ylab) +
+    theme(legend.position = "none")
+
+  p_zoom <- ggplot(jit_views %>% filter(dnll <= 10),
+                   aes(x = dnll, y = .data[[yvar]],
+                       color = .data[[group_var]])) +
+    geom_point(alpha = 0.6) +
+    facet_wrap(vars(.data[[group_var]]), nrow = 1) +
+    theme_bw() +
+    labs(x = expression(Delta * " NLL (relative to per-model min, " <= 10 * ")"),
+         y = ylab) +
+    theme(strip.text = element_blank(), legend.position = "none")
+
+  patchwork::wrap_plots(p_full, p_zoom, ncol = 1) +
+    plot_annotation(title = "Jitter Convergence Check")
+}
 
 # - OFL
-p <- ggplot(jit_plot_df, aes(x = negloglike, y = OFL, color = scenario)) +
-  geom_point(alpha = 0.6) +
-  facet_grid(view ~ scenario, scales = "free") +
-  theme_bw() +
-  labs(title = "Jitter Convergence Check",
-       x = "Negative Log-Likelihood",
-       y = "OFL (1,000 t)")
-ggsave(p, filename = 'plots/jittered_results_ofl.png', height = 8, width = 10, dpi = 300, units = 'in')
+p <- make_jitter_panels("OFL", "OFL (1,000 t)", "model")
+ggsave(p, filename = 'plots/jittered_results_ofl.png', height = 8, width = 15, dpi = 300, units = 'in')
 p
 
 # - SSB
-p <- ggplot(jit_plot_df, aes(x = negloglike, y = SSB, color = model)) +
-  geom_point(alpha = 0.6) +
-  facet_grid(view ~ model, scales = "free") +
-  theme_bw() +
-  labs(title = "Jitter Convergence Check",
-       x = "Negative Log-Likelihood",
-       y = "SSB 2024 (1,000 t)")
-ggsave(p, filename = 'plots/jittered_results_ssb.png', height = 8, width = 10, dpi = 300, units = 'in')
+p <- make_jitter_panels("SSB", "SSB 2024 (1,000 t)", "model")
+ggsave(p, filename = 'plots/jittered_results_ssb.png', height = 8, width = 15, dpi = 300, units = 'in')
 p
 
 # - R males
-p <- ggplot(jit_plot_df, aes(x = negloglike, y = Rmales, color = model)) +
-  geom_point(alpha = 0.6) +
-  facet_grid(view ~ model, scales = "free") +
-  theme_bw() +
-  labs(title = "Jitter Convergence Check",
-       x = "Negative Log-Likelihood",
-       y = "Male recruitment 2024 (1,000 t)")
-ggsave(p, filename = 'plots/jittered_results_rec.png', height = 8, width = 10, dpi = 300, units = 'in')
+p <- make_jitter_panels("Rmales", "Male recruitment 2024 (1,000 t)", "model")
+ggsave(p, filename = 'plots/jittered_results_rec.png', height = 8, width = 15, dpi = 300, units = 'in')
 p
