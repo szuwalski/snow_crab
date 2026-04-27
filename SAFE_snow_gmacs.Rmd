@@ -97,7 +97,7 @@ report_model <- model_defs[7]
 
 
 # Global Switches
-do_size_comps  <- 0 # Set to 1 to regenerate PNGs (can take time)
+do_size_comps  <- 1 # Set to 1 to regenerate PNGs (can take time)
 do_proj        <- 0 # Set to 1 to process projection files
 make_proj_fig  <- 0 # Set to 1 to generate projection plots
 
@@ -415,7 +415,7 @@ The bimodality in management quantities reported in the 2025 preliminary and fin
 ### Model fits
 Fits to the survey indices of mature biomass were broadly similar across the models (Figure \@ref(fig:mmbfits)). All of the data-update candidate models (i.e., every model that incorporates the 2025 NMFS summer survey, regardless of plus group, comp-fix, hybrid, or maturity treatment) continue to have difficulty fitting the terminal year of female biomass. Inputting a yearly varying probability of terminal molt from the new maturity workflow ('new_mat' models) shifts the estimated population dynamics modestly but does not resolve the female terminal-year fit (Figure \@ref(fig:mmbfits)).
 
-The hybrid-survey models produce visibly higher predicted survey biomass in some years (the additional hybrid biomass is added to the snow-crab time-series), but the trend through time is unchanged. The models with the immature survey index ('imm_surv') fit the new immature index well in recent years.
+The hybrid-survey models produce visibly higher predicted survey biomass in some years (the additional hybrid biomass is added to the snow-crab time-series), but the trend through time is unchanged. The models with the immature survey index ('imm_surv') fit the new immature index well in recent years, except when using the new maturity ogive.
 
 Fits to the non-directed fishery catches were good for all models (Figure \@ref(fig:catchfits)). Fits to the directed-fishery retained catch were also good across the model set. Fits to the directed-fishery discard time-series differ in the hybrid-fishery models because the observed discards in those models include hybrid crab (and so are larger; e.g., ~18 kt of legal-male hybrid catch in 1997 reported by ADF&G with the caveat that observer hybrid identification quality decreases further back in the time-series; Table \@ref(tab:obscatch)). The models accommodate the additional discards primarily through changes in estimated discard fishing mortality rather than through major changes in selectivity.
 
