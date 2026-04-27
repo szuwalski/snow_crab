@@ -390,6 +390,8 @@ Hybrid catch and composition data were provided by ADF&G (T. Jackson, ADF&G Comm
 
 * **25.1 gmacs (update + hyb_both + new_mat)** -- combination of `hyb_both` and the new maturity workflow. Males snow crab and hybrids were apportioned to immature and mature using the new maturity ogive. 
 
+Note that the combination of hybrids and the immature survey were not explored.
+
 # D. Analytic approach
 
 
