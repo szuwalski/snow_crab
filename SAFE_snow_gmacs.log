@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2024) (preloaded format=pdflatex 2026.4.23)  23 APR 2026 11:18
+This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2024) (preloaded format=pdflatex 2026.4.26)  26 APR 2026 21:21
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -257,7 +257,7 @@ Package graphics Info: Driver file: pdftex.def on input line 106.
 )
 \pandoc@box=\box62
 
-! LaTeX Error: File `pdfpages.sty' not found.
+! LaTeX Error: File `pdflscape.sty' not found.
 
 Type X to quit or <RETURN> to proceed,
 or enter new name. (Default extension: sty)
@@ -266,11 +266,11 @@ Enter file name:
 ! Emergency stop.
 <read *> 
          
-l.69 \usepackage
-                {geometry}^^M 
+l.71 \newcommand
+                {\blandscape}{\begin{landscape}}^^M 
 Here is how much of TeX's memory you used:
  3966 strings out of 475210
- 54270 string characters out of 5765891
+ 54274 string characters out of 5765891
  442693 words of memory out of 5000000
  26918 multiletter control sequences out of 15000+600000
  558832 words of font info for 37 fonts, out of 8000000 for 9000
