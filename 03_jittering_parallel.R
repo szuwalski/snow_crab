@@ -153,7 +153,7 @@ p <- ggplot(jit_plot_df, aes(x = negloglike, y = OFL, color = scenario)) +
   labs(title = "Jitter Convergence Check",
        x = "Negative Log-Likelihood",
        y = "OFL (1,000 t)")
-ggsave(p, filename = 'plots/jittered_results_ofl.png', height = 8, width = 10, dpi = 300, units = 'in')
+ggsave(p, filename = 'plots/jittered_results_ofl.png', height = 8, width = 12, dpi = 300, units = 'in')
 p
 
 # - SSB
@@ -164,7 +164,7 @@ p <- ggplot(jit_plot_df, aes(x = negloglike, y = SSB, color = model)) +
   labs(title = "Jitter Convergence Check",
        x = "Negative Log-Likelihood",
        y = "SSB 2024 (1,000 t)")
-ggsave(p, filename = 'plots/jittered_results_ssb.png', height = 8, width = 10, dpi = 300, units = 'in')
+ggsave(p, filename = 'plots/jittered_results_ssb.png', height = 8, width = 12, dpi = 300, units = 'in')
 p
 
 # - R males
@@ -175,5 +175,5 @@ p <- ggplot(jit_plot_df, aes(x = negloglike, y = Rmales, color = model)) +
   labs(title = "Jitter Convergence Check",
        x = "Negative Log-Likelihood",
        y = "Male recruitment 2024 (1,000 t)")
-ggsave(p, filename = 'plots/jittered_results_rec.png', height = 8, width = 10, dpi = 300, units = 'in')
+ggsave(p, filename = 'plots/jittered_results_rec.png', height = 8, width = 12, dpi = 300, units = 'in')
 p
