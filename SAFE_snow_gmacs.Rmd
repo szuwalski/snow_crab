@@ -830,26 +830,48 @@ mgmt_targets <- list(
 extract_mgmt_quantities <- function(path, model_name) {
   out_file <- file.path(path, "Gmacsall.out")
   if (!file.exists(out_file)) return(NULL)
-  
+
   tmp <- readLines(out_file)
-  
+
   # Identify the summary block
   st  <- grep("BMSY", tmp)[1]
   end <- grep("Ofl", tmp) |> tail(1)
   mgmt_block <- tmp[st:end]
-  
+
   # Extract values based on targets
   values <- lapply(names(mgmt_targets), function(target) {
     line <- mgmt_block[grep(target, mgmt_block)][1]
     if (is.na(line)) return(NA)
-    
+
     # Split by one or more spaces
     parts <- unlist(strsplit(trimws(line), " "))
     idx   <- mgmt_targets[[target]]
     return(as.numeric(parts[idx]))
   })
-  
+
   names(values) <- names(mgmt_targets)
+
+  # Extract male natural mortality (immature and mature) for the most recent
+  # year. M is constant across the 22 size classes, so the first size-class
+  # column is sufficient.
+  m_start <- grep("Natural_mortality-by-class: dataframe", tmp, fixed = TRUE)[1]
+  m_imm <- NA_real_
+  m_mat <- NA_real_
+  if (!is.na(m_start)) {
+    eod_rel <- grep(">EOD<", tmp[(m_start + 1):length(tmp)], fixed = TRUE)[1]
+    m_end <- m_start + eod_rel - 1
+    m_block <- tmp[(m_start + 2):(m_end - 1)]
+    m_df <- utils::read.table(text = m_block, header = FALSE,
+                              stringsAsFactors = FALSE)
+    colnames(m_df)[1:4] <- c("Year", "Sex", "Maturity", "M")
+    males <- m_df[m_df$Sex == "male", ]
+    latest <- max(males$Year, na.rm = TRUE)
+    m_imm <- males$M[males$Year == latest & males$Maturity == "immature"][1]
+    m_mat <- males$M[males$Year == latest & males$Maturity == "mature"][1]
+  }
+  values[["M (imm males)"]] <- as.numeric(m_imm)
+  values[["M (mat males)"]] <- as.numeric(m_mat)
+
   return(dplyr::as_tibble(values) |> dplyr::mutate(Model = model_name))
 }
 
@@ -864,7 +886,7 @@ flextable::flextable(ref_table) |>
   flextable::colformat_double(digits = 2) |>
   flextable::autofit() |>
   flextable::set_caption(
-    caption = "Management quantities derived from maximum likelihood estimates by model using Tier 3 reference points. Reported natural mortality is for mature males, average recruitment is for males, and status and MMB were estimates for February 15 of the completed crab year.",
+    caption = "Management quantities derived from maximum likelihood estimates by model using Tier 3 reference points. Reported natural mortality is for immature and mature males in the terminal year of the assessment, average recruitment is for males, and status and MMB were estimates for February 15 of the completed crab year.",
     autonum = officer::run_autonum(seq_id = "tab", pre_label = "Table ", bkm = "stepchange")
   )
 ```
@@ -1807,16 +1829,45 @@ ggplot(dfr)+
 
 ```{r size-comp-plots, results='asis', echo=FALSE, warning=FALSE, message=FALSE, out.width="100%"}
 
-# 1. Get a list of all comp plots and sort by the numeric ID embedded in the
-#    filename (e.g. size_comp_plot_5_... should come before _10_...).
+# Order comp plots by base fleet, comp_type, sex, maturity so that fits across
+# model variants (hybrid/compfix/plus_group; new vs. old maturity ogive) for
+# the same data block sit next to each other.
 img_folder <- "plots"
 img_files  <- list.files(path = img_folder, pattern = "^size_comp_plot_", full.names = TRUE)
 
-# Extract the numeric ID after "size_comp_plot_" for proper ordering
-ids        <- as.numeric(sub("^size_comp_plot_(\\d+)_.*$", "\\1", basename(img_files)))
-img_files  <- img_files[order(ids)]
+parse_meta <- function(f) {
+  base  <- tools::file_path_sans_ext(basename(f))
+  desc  <- sub("^size_comp_plot_\\d+_", "", base)
+  parts <- strsplit(desc, "_")[[1]]
+  sex_idx <- which(parts %in% c("male", "female"))[1]
+  if (is.na(sex_idx)) {
+    return(data.frame(file = f, fleet_full = NA_character_, base_fleet = NA_character_,
+                      comp_type = NA_character_, sex = NA_character_,
+                      maturity = NA_character_, ogive = NA_character_,
+                      stringsAsFactors = FALSE))
+  }
+  fleet_full <- paste(parts[seq_len(sex_idx - 1)], collapse = "_")
+  sex        <- parts[sex_idx]
+  comp_type  <- parts[sex_idx + 1]
+  maturity   <- parts[sex_idx + 2]
+  ogive      <- if (sex_idx + 3 <= length(parts))
+                  paste(parts[seq(sex_idx + 3, length(parts))], collapse = "_") else NA_character_
+  base_fleet <- tolower(fleet_full)
+  base_fleet <- sub("_(hybrid|compfix|plus_group)$", "", base_fleet)
+  data.frame(file = f, fleet_full = fleet_full, base_fleet = base_fleet,
+             comp_type = comp_type, sex = sex, maturity = maturity, ogive = ogive,
+             stringsAsFactors = FALSE)
+}
 
-# Build a clean caption from the filename (strip prefix, id, and extension; replace _ with space)
+meta <- do.call(rbind, lapply(img_files, parse_meta))
+
+meta$comp_type <- factor(meta$comp_type, levels = c("retained", "total", "discarded"))
+meta$sex       <- factor(meta$sex,       levels = c("female", "male"))
+meta$maturity  <- factor(meta$maturity,  levels = c("immature", "mature", "undetermined"))
+
+meta <- meta[order(meta$base_fleet, meta$comp_type, meta$sex, meta$maturity,
+                   meta$fleet_full, meta$ogive), ]
+
 make_caption <- function(f) {
   base <- tools::file_path_sans_ext(basename(f))
   desc <- sub("^size_comp_plot_\\d+_", "", base)
@@ -1824,9 +1875,7 @@ make_caption <- function(f) {
   paste0("Model fits (lines) to size composition data (grey bars): ", desc, ".")
 }
 
-# 2. Loop through each file and include it on a new page.
-#    URLencode handles the spaces in some filenames (e.g. "Old maturity.png").
-for (f in img_files) {
+for (f in meta$file) {
   cat("![", make_caption(f), "](", URLencode(f), ")\n\n", sep = "")
   cat("\\newpage\n\n")
 }
