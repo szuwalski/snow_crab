@@ -687,11 +687,12 @@ flextable::flextable(tot_likes_df) |>
 extract_max_gradient <- function(path) {
   grad_file <- file.path(path, "gradient.dat")
   if (!file.exists(grad_file)) {
-    return(data.frame(Parameter = NA_character_, MaxAbsGradient = NA_real_))
+    return(data.frame(NPar = NA_integer_, Parameter = NA_character_, MaxAbsGradient = NA_real_))
   }
   grad <- read.table(grad_file, header = TRUE, stringsAsFactors = FALSE)
   idx <- which.max(abs(grad$Gradient))
   data.frame(
+    NPar           = nrow(grad),
     Parameter      = grad$ParName[idx],
     MaxAbsGradient = abs(grad$Gradient[idx])
   )
@@ -701,12 +702,13 @@ max_grad_df <- purrr::imap_dfr(model_defs, function(path, label) {
   out <- extract_max_gradient(path)
   data.frame(
     Model          = as.character((label)),
+    NPar           = out$NPar,
     Parameter      = out$Parameter,
     MaxAbsGradient = round(out$MaxAbsGradient, 5)
   )
 })
 
-colnames(max_grad_df) <- c("Model", "Parameter", "Max |gradient|")
+colnames(max_grad_df) <- c("Model", "N parameters", "Parameter", "Max |gradient|")
 
 flextable::flextable(max_grad_df) |>
   flextable::autofit() |>
