@@ -1,7 +1,7 @@
 #datafile                             
 25_snow_update_newmat_plus_group.dat                             
 #controlfile                             
-25_snow_update_newmat_plus_group.ctl                             
+snow.ctl                             
 #projectionfile                             
 snow.prj                             
 # Weight unit                           

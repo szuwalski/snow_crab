@@ -3,18 +3,17 @@ title: "Preliminary 2026 assessment for eastern Bering Sea snow crab"
 author: "Grant Adams"
 date: "May 2026"
 output:
+  officedown::rdocx_document:
+    base_format: "bookdown::word_document2"
+    number_sections: false
+    fig_caption: true
+    toc: true
   bookdown::pdf_document2:
     fig_caption: true
     fig_height: 4
     fig_width: 6
-    number_sections: true
+    number_sections: false
     toc: true
-  bookdown::word_document2:
-    fig_caption: true
-    number_sections: true
-    toc: true
-  officedown::rdocx_document: default
-csl: "fish-and-fisheries.csl"
 header-includes:
 - \usepackage{geometry}
 - \geometry{margin=1in}
@@ -36,7 +35,7 @@ knitr::opts_chunk$set(
 
 # Load libraries - loading dplyr AFTER plyr to prevent function masking
 pacman::p_load(plyr, dplyr, knitr, ggplot2, pander, reshape2, patchwork)
-pacman::p_load(officedown, officer) # processes BLOCK_LANDSCAPE markers in Word output
+pacman::p_load(officedown, officer, flextable) # processes BLOCK_LANDSCAPE markers in Word output; flextable for cross-referenceable tables
 pacman::p_load(wtsGMACS, wtsUtilities) # https://github.com/wStockhausen?tab=repositories
 
 
@@ -407,7 +406,7 @@ Models were evaluated based on their fit to the data, evidence of non-convergenc
 
 # E. Results
 ### Model convergence and comparison
-All `r length(model_defs)` models presented here produced small maximum gradients and Hessian matrices. As in past cycles, jittering was used to evaluate sensitivity to starting values: parameter values were jittered based on a normal distribution centered on one with a standard deviation of 0.1, translated to the parameter space defined by the initial value and its bounds. One hundred jitters were run for six models that span the range of structural and data choices -- '25.1 gmacs (update + plus group)', '25.1 gmacs (update + new_mat + plus group)', '25.1 gmacs (update + hyb_both)', '25.1 gmacs (update + hyb_both + new_mat)', '25.1 gmacs (update + imm_surv + plus group)', and '25.1 gmacs (update + newmat + imm_surv + plus group)'. Likelihood components by category for each candidate model are summarized in Table \@ref(tab:like-comp-tot).
+All `r length(model_defs)` models presented here inverted their Hessians, but most did not meet the conventional convergence threshold of a maximum absolute gradient < 0.001 (Table \@ref(tab:max-grad)). Only '25.1 gmacs (update + imm_surv + compfix)' fell below that threshold; the remaining 13 models had max |gradient| > 0.001, with '25.1 gmacs (update + hyb_both)' the largest at ~0.10. As in past cycles, jittering was used to evaluate sensitivity to starting values: parameter values were jittered based on a normal distribution centered on one with a standard deviation of 0.1, translated to the parameter space defined by the initial value and its bounds. One hundred jitters were run for six models that span the range of structural and data choices -- '25.1 gmacs (update + plus group)', '25.1 gmacs (update + new_mat + plus group)', '25.1 gmacs (update + hyb_both)', '25.1 gmacs (update + hyb_both + new_mat)', '25.1 gmacs (update + imm_surv + plus group)', and '25.1 gmacs (update + newmat + imm_surv + plus group)'. Likelihood components by category for each candidate model are summarized in Table \@ref(tab:like-comp-tot).
 
 The bimodality in management quantities reported in the 2025 preliminary and final assessments persists in most of the 2026 candidate models that do *not* include the immature survey index, with two distinct clouds of converged OFLs separated by ~50--100 negative-log-likelihood units and OFLs that differ by several thousand tonnes (Figure \@ref(fig:jitter)). The bimodality is also visible in the corresponding estimates of 2024 male recruitment (Figure \@ref(fig:jitt-rec)) and 2024 MMB (Figure \@ref(fig:jitt-ssb)). Adding the immature survey index alongside the updated plus group ('25.1 gmacs (update + imm_surv + plus group)') eliminates the bimodality entirely -- jitter runs converge to a single cloud of solutions (Figure \@ref(fig:jitter)). This is an encouraging diagnostic, but the immature-index model also produces a substantially smaller $B_{MSY}$ and a much higher mature male natural mortality (see below), so the apparent fix should not be interpreted as an unqualified improvement. The recent history of bimodality in this assessment (Turnock, 2016) suggests that resolving the underlying source of multiple optima will require further evaluation before September.
 
@@ -432,7 +431,7 @@ Trends in recruitment were very similar across models for the early time series,
 Base estimates of natural mortality for mature animals of both sexes were broadly similar across models, with one important exception: the model with the immature survey index produces a substantially higher mature male natural mortality than the other models (Figure \@ref(fig:nat-m)). All models estimated additional mortality events that removed at least 80% of crab by sex and maturity state (except for mature females) at some point during the marine heatwave of 2018--19. Models 25.1 gmacs and 25.1 gmacs (update + hyb_both) estimated immature female natural mortality to above 100 in 2019, much higher than the other models and suggesting the models should not be selected to provide management advice.
 
 ### MMB and management quantities
-Estimated mature male biomass time series had similar trends across models but the scales differed by up to ~50% in some years (Figure \@ref(fig:predmmb)). Total numbers of crab predicted by the author-preferred model are reported in Table \@ref(tab:predtotnum). Estimates of $B_{MSY}$, current MMB relative to $B_{MSY}$, $F_{MSY}$, $F_{OFL}$, and the directed Tier 3 OFL are summarized in Table \@ref(tab:stepchange). Across models other than the immature-index sensitivity, $B_{MSY}$ ranged from ~160 to ~184 kt and the directed OFL ranged from ~42 to ~56 kt, with current MMB at 87--102% of $B_{MSY}$. The immature-index plus-group model produced an outlier $B_{MSY}$ of 94 kt and an OFL of ~36 kt despite achieving a similar status; this large difference results from the much larger estimated mature male natural mortality in that model, which propagates into the spawning biomass-per-recruit reference points.
+Estimated mature male biomass time series had similar trends across models but the scales differed by up to ~50% in some years (Figure \@ref(fig:predmmb)). Estimates of $B_{MSY}$, current MMB relative to $B_{MSY}$, $F_{MSY}$, $F_{OFL}$, and the directed Tier 3 OFL are summarized in Table \@ref(tab:stepchange). Across models other than the immature-index sensitivity, $B_{MSY}$ ranged from ~160 to ~184 kt and the directed OFL ranged from ~42 to ~56 kt, with current MMB at 87--102% of $B_{MSY}$. The immature-index plus-group model produced an outlier $B_{MSY}$ of 94 kt and an OFL of ~36 kt despite achieving a similar status; this large difference results from the much larger estimated mature male natural mortality in that model, which propagates into the spawning biomass-per-recruit reference points.
 
 The hybrid-fishery and hybrid-both models produced slightly lower $B_{MSY}$ proxies (~166--170 kt) than the corresponding non-hybrid models (~178--184 kt), reflecting the additional fishing mortality implied by the larger discard time-series. The new-maturity models produced $B_{MSY}$ proxies near the lower end of the non-hybrid range (~172 kt) but the highest OFLs (~50--52 kt) because the weaker time trend in the probability of terminal molt translates into more crab being available at the size bins targeted by the fishery in the projection window.
 
@@ -663,20 +662,63 @@ rownames(tot_likes) <- tot_likes$Object
 tot_likes <- tot_likes[,-1]
 colnames(tot_likes) <- as.character(to_short(names(model_defs)))
 
-# Use kable to render, excluding row 8 as in your original snippet
-kable(
-  round(tot_likes, 2), 
-  split.cells = c(25, rep(12, ncol(tot_likes))), 
-  justify = c("left", rep("center", ncol(tot_likes))), 
-  caption = "(\\#tab:like-comp-tot) Likelihood components by category and model."
+# Render with flextable so the caption produces a Word bookmark/sequence
+# field that bookdown's \@ref(tab:like-comp-tot) can resolve.
+tot_likes_df <- data.frame(
+  Component   = rownames(tot_likes),
+  round(tot_likes, 2),
+  check.names = FALSE
 )
+
+flextable::flextable(tot_likes_df) |>
+  flextable::autofit() |>
+  flextable::set_caption(
+    caption = "Likelihood components by category and model.",
+    autonum = officer::run_autonum(seq_id = "tab", pre_label = "Table ", bkm = "like-comp-tot")
+  )
 
 
 ```
-<!---BLOCK_LANDSCAPE_STOP--->
-\elandscape
 
 \newpage
+
+```{r max-grad, echo=FALSE, warning=FALSE, message=F}
+
+extract_max_gradient <- function(path) {
+  grad_file <- file.path(path, "gradient.dat")
+  if (!file.exists(grad_file)) {
+    return(data.frame(Parameter = NA_character_, MaxAbsGradient = NA_real_))
+  }
+  grad <- read.table(grad_file, header = TRUE, stringsAsFactors = FALSE)
+  idx <- which.max(abs(grad$Gradient))
+  data.frame(
+    Parameter      = grad$ParName[idx],
+    MaxAbsGradient = abs(grad$Gradient[idx])
+  )
+}
+
+max_grad_df <- purrr::imap_dfr(model_defs, function(path, label) {
+  out <- extract_max_gradient(path)
+  data.frame(
+    Model          = as.character((label)),
+    Parameter      = out$Parameter,
+    MaxAbsGradient = round(out$MaxAbsGradient, 5)
+  )
+})
+
+colnames(max_grad_df) <- c("Model", "Parameter", "Max |gradient|")
+
+flextable::flextable(max_grad_df) |>
+  flextable::autofit() |>
+  flextable::set_caption(
+    caption = "Maximum absolute value gradient and corresponding parameter for each candidate model.",
+    autonum = officer::run_autonum(seq_id = "tab", pre_label = "Table ", bkm = "max-grad")
+  )
+
+```
+
+<!---BLOCK_LANDSCAPE_STOP--->
+\elandscape
 
 ```{r,echo=FALSE,warning=FALSE,message=F, eval = FALSE}
 
@@ -712,7 +754,6 @@ kable(
 )
 ```
 
-\newpage
 
 ```{r obscatch, echo=FALSE, warning=FALSE, message=F}
 # 1. Extract and combine data from multiple cases
@@ -752,12 +793,14 @@ PlotTab <- catch_comparison %>%
   dplyr::select("Year", "Retained (kt)", "Non-directed Bycatch", "Discard Male Pot", "Discard Male Pot + hybrids", "Discard Female", "Discard Female + hybrids")
 PlotTab[is.na(PlotTab)] <- 0
 
-# 3. Render with pander
-pander::pander(
-  round(PlotTab, 2), 
-  split.cells = 10, 
-  caption = "(\\#tab:obscatch) Comparison of observed retained catches, discards, and bycatch between base and hybrid cases (Units: 1,000 tonnes)."
-)
+# 3. Render with flextable + run_autonum so the Word caption carries a SEQ
+#    field that \@ref(tab:obscatch) can target.
+flextable::flextable(round(PlotTab, 2)) |>
+  flextable::autofit() |>
+  flextable::set_caption(
+    caption = "Comparison of observed retained catches, discards, and bycatch between base and hybrid cases (Units: 1,000 tonnes).",
+    autonum = officer::run_autonum(seq_id = "tab", pre_label = "Table ", bkm = "obscatch")
+  )
 
 
 ```
@@ -809,22 +852,21 @@ extract_mgmt_quantities <- function(path, model_name) {
 # Iterate over all models and combine results
 ref_table <- names(model_defs) |>
   purrr::map_dfr(~extract_mgmt_quantities(model_defs[.x], .x)) |>
-  dplyr::mutate(Model = as.character(to_short(Model))) |>
+  dplyr::mutate(Model = as.character((Model))) |>
   dplyr::select(Model, everything()) # Reorder to put Model first
 
-# Render table
-kable(
-  ref_table, 
-  digits = 2,
-  split.cells = c(25, rep(12, ncol(ref_table) - 1)), 
-  justify = c("left", rep("center", ncol(ref_table) - 1)), 
-  caption = "(\\#tab:stepchange) Management quantities derived from maximum likelihood estimates by model using Tier 3 reference points. Reported natural mortality is for mature males, average recruitment is for males, and status and MMB were estimates for February 15 of the completed crab year."
-)
+# Render with flextable so \@ref(tab:stepchange) resolves in Word output.
+flextable::flextable(ref_table) |>
+  flextable::colformat_double(digits = 2) |>
+  flextable::autofit() |>
+  flextable::set_caption(
+    caption = "Management quantities derived from maximum likelihood estimates by model using Tier 3 reference points. Reported natural mortality is for mature males, average recruitment is for males, and status and MMB were estimates for February 15 of the completed crab year.",
+    autonum = officer::run_autonum(seq_id = "tab", pre_label = "Table ", bkm = "stepchange")
+  )
 ```
 <!---BLOCK_LANDSCAPE_STOP--->
 \elandscape
 
-\newpage
 
 ```{r,echo=FALSE,warning=FALSE,message=F, eval = FALSE}
 # --- 1. Extract Weight and Results ---
@@ -925,9 +967,9 @@ pander::pander(
 
 ```
 
-\newpage
 
-```{r predtotnum, echo=FALSE, warning=FALSE, message=F}
+
+```{r predtotnum, echo=FALSE, warning=FALSE, message=FALSE, eval = FALSE}
 # --- 0. Helper + load Gmacsall.out ---
 # Inlined here so this chunk does not depend on the eval=FALSE chunk above.
 extract_gmacs_df <- function(lines, header) {
@@ -958,17 +1000,15 @@ tmp_mat <- data.frame(
   check.names     = FALSE
 )
 
-# --- 4. Render Table ---
-pander::pander(
+# --- 4. Render Table (kable for bookdown table cross-references in Word) ---
+knitr::kable(
   tmp_mat,
-  split.cells = 10,
-  split.table = Inf,
   caption = "(\\#tab:predtotnum) Maximum likelihood estimates of total numbers of crab (billions), not subject to survey selectivity at the time of the survey."
 )
 
 ```
 
-\newpage
+
 
 ```{r,echo=FALSE,warning=FALSE,message=F, eval = FALSE}
 
@@ -1029,7 +1069,8 @@ pander::pander(
 
 
 
-
+\blandscape
+<!---BLOCK_LANDSCAPE_START--->
 ```{r jitter, echo=FALSE, warning=FALSE, message=F, out.width="100%", fig.cap="Directed OFLs resulting from 100 jitter runs for the models that span the structural and data choices presented in this document. Each point is a converged jitter run; clouds separated vertically reflect alternative local optima."}
 
 # Drop the jitter PNG into plots/jittered_ofl.png (produced by 03_jittering_parallel.R).
@@ -1069,9 +1110,9 @@ if (file.exists(jitter_ssb_png)) {
 ```
 
 \newpage
-<!---BLOCK_LANDSCAPE_START--->
-\blandscape
-```{r mmbfits, echo=FALSE, warning=FALSE, message=F, fig.width=8.5, fig.height=8, fig.cap="Model fits to the observed mature biomass at survey."}
+
+
+```{r mmbfits, echo=FALSE, warning=FALSE, message=F, fig.width=9, fig.height=5.5, fig.cap="Model fits to the observed mature biomass at survey."}
 
 # --- 1. Process Prediction Data and Add Hybrid Status ---
 dfrIndxFit_plot <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |> 
@@ -1152,6 +1193,81 @@ p_idx_final <- ggplot() +
   )
 
 print(p_idx_final)
+
+```
+
+\newpage
+
+
+```{r immfits, echo=FALSE, warning=FALSE, message=F, fig.width=9, fig.height=5.5, fig.cap="Model fits to the observed immature survey biomass for models that include the immature survey index. Panels separate models by maturity workflow (old vs. new) and hybrid treatment."}
+
+# --- 1. Process Immature Index Data and Add Hybrid / Maturity Status ---
+dfrImmFit_plot <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |>
+  dplyr::filter(case != "25.1 gmacs" & maturity == "immature") %>%
+  dplyr::mutate(
+    across(c(year, obs, base_CV, actual_CV, q, prd, prsn_res), as.numeric)
+  ) |>
+  dplyr::rename(
+    predicted = prd,
+    residuals = prsn_res,
+    model     = case
+  ) |>
+  dplyr::mutate(
+    hybrid_status = ifelse(grepl("hyb_surv|hyb_both", model, ignore.case = TRUE),
+                           "Hybrid Included",
+                           "Standard Survey"),
+    maturity_status = ifelse(grepl("new_mat", model, ignore.case = TRUE),
+                           "New maturity",
+                           "Old maturity"),
+    model = to_short(model),
+    sd_log = sqrt(log(1 + actual_CV^2)),
+    lba    = qlnorm(0.05, log(obs), sd_log),
+    uba    = qlnorm(0.95, log(obs), sd_log)
+  )
+
+# --- 2. Extract Unique Observations ---
+dfrObs <- dfrImmFit_plot |>
+  dplyr::distinct(year, sex, hybrid_status, maturity_status, obs, lba, uba)
+
+# --- 3. Generate the Plot ---
+p_imm_final <- ggplot() +
+  geom_line(
+    data = dfrImmFit_plot,
+    aes(x = year, y = predicted, colour = model),
+    lwd = 0.9,
+    alpha = 0.8
+  ) +
+  geom_errorbar(
+    data = dfrObs,
+    aes(x = year, ymin = lba, ymax = uba),
+    width = 0.3,
+    color = "black",
+    alpha = 0.6
+  ) +
+  geom_point(
+    data = dfrObs,
+    aes(x = year, y = obs),
+    size = 1.2,
+    color = "black"
+  ) +
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
+  labs(
+    x = "Year",
+    y = "NMFS Immature Survey Biomass (1,000 t)",
+    colour = "Model Prediction",
+    subtitle = "Points/Bars: Shared Observations | Lines: Model Fits",
+    caption = "Error bars represent 95% log-normal confidence intervals on observations."
+  ) +
+  facet_grid(sex ~ hybrid_status + maturity_status, scales = "free_y") +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 8),
+    strip.background = element_rect(fill = "white"),
+    panel.spacing = unit(1, "lines")
+  )
+
+print(p_imm_final)
 
 ```
 <!---BLOCK_LANDSCAPE_STOP--->
@@ -1254,7 +1370,7 @@ print(p_catch)
 \newpage
 
 
-```{r obs-101-vs-pred, echo=FALSE, warning=FALSE, message=F, out.width="100%", fig.cap="Estimated biomass of male crab >101mm carapace width from the survey (black line and dots with gray 95th CI) and from each model in the assessment (colored lines)."}
+```{r obs-101-vs-pred, echo=FALSE, warning=FALSE, message=F, out.width="100%", fig.cap="Estimated abundance of male crab >101mm carapace width from the survey (black line and dots with gray 95th CI) and from each model in the assessment (colored lines)."}
 EBSdata	<-read.csv("data/survey_lg_males.csv")
 #==make upper and lower CIs
 EBSdata$upper_bio_ci<-exp(log(EBSdata$BIOMASS_MT)+1.96*(sqrt(log(1+EBSdata$BIOMASS_MT_CV^2))))
@@ -1307,7 +1423,90 @@ print(large_males2)
 
 \newpage
 
-```{r select-prior, echo=FALSE, warning=FALSE, message=F, fig.height=10, fig.width=7, fig.cap="Estimated survey selectivity (lines) with normal priors derived from BSFRF selectivity experiment data. Points are the mean of the prior at a given size; intervals are 95th quantiles based on input CVs."}
+```{r obs-101-vs-pred-bio, echo=FALSE, warning=FALSE, message=F, out.width="100%", fig.cap="Estimated biomass of male crab >101mm carapace width from the survey (black line and dots with gray 95th CI) and from each model in the assessment (colored lines)."}
+
+# Weight-at-size for mature males (kg per crab) from the report model.
+# Weight-at-size is fixed input data, so a single year is representative.
+wt_row <- reslst$repsLst[[names(report_model)]]$IndivWeightByXM |>
+  dplyr::filter(Sex == "male", Year == 1982, Maturity == "mature")
+male_wt_lookup <- data.frame(
+  size = as.numeric(names(wt_row |> dplyr::select(matches("^[0-9]")))),
+  wt   = as.numeric(wt_row |> dplyr::select(matches("^[0-9]")))
+)
+
+pred_101_b2 <- filter(dfrN_YXMSZ, sex == 'male' & size > 101) |>
+  dplyr::left_join(male_wt_lookup, by = "size") |>
+  dplyr::group_by(year, case) |>
+  dplyr::summarize(BIO = sum(est * wt), .groups = "drop")
+
+pred_101_b3 <- filter(dfrN_YXMSZ, sex == 'male' & size == 97.5) |>
+  dplyr::left_join(male_wt_lookup, by = "size") |>
+  dplyr::group_by(year, case) |>
+  dplyr::summarize(BIO = 3/5 * sum(est * wt), .groups = "drop")
+
+pred_101_b2$tot_BIO <- pred_101_b2$BIO + pred_101_b3$BIO
+pred_101_b2$case <- to_short(pred_101_b2$case)
+
+div_b <- 1000
+large_males_bio <- ggplot() +
+  geom_ribbon(data = male_101,
+              aes(x = YEAR,
+                  ymin = lower_bio_ci / div_b,
+                  ymax = upper_bio_ci / div_b),
+              fill = 'light grey') +
+  geom_line(data = pred_101_b2,
+            aes(x = year, y = tot_BIO, color = case),
+            lwd = 1.1, alpha = 0.6) +
+  theme_bw() +
+  theme(legend.position = 'bottom') +
+  expand_limits(y = 0) +
+  xlab("") +
+  scale_y_continuous(name = "Biomass (1,000 t)", position = 'left')
+
+print(large_males_bio)
+
+```
+
+\newpage
+
+@cody, check MMA units
+```{r predmmb, echo=FALSE, warning=FALSE, message=FALSE, eval = TRUE, fig.height=8, fig.width=8, fig.cap="Model predicted mature male biomass (1,000 tonnes) and abundance at mating time."}
+#=========================================================
+#  Plot derived quantities
+#=========================================================
+
+dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |>
+  dplyr::select(case, year, SSB, SSA) |>
+  dplyr::rename(MMB = SSB,
+                MMA = SSA) |>
+  # Coerce only the numeric columns (the previous `across(everything())`
+  # silently turned `case` into NA via as.numeric on the model labels).
+  dplyr::mutate(across(c(year, MMB, MMA), as.numeric)) |>
+  dplyr::mutate(case = to_short(case)) |>
+  tidyr::pivot_longer(cols = c(MMB, MMA),
+                       names_to = "metric",
+                       values_to = "value") |>
+   dplyr::mutate(metric = dplyr::recode(metric,
+                                        BIO = "Biomass (1,000 t)",
+                                        ABN = "Abundance"))
+
+#==add reference points back in
+ggplot(dfr)+
+  geom_line(aes(x = year,y = value, col = case)) +
+  labs(col="Model", x="Year", y="MMB (1,000 t)") +
+  facet_wrap(~ metric, ncol = 1, scales = "free_y") +
+  theme(legend.position = 'bottom',
+         strip.background = element_rect(fill = "white")) +
+  theme_bw() +
+  labs(x = "Year", y = NULL, color = "Model") +
+  expand_limits(y=0)
+
+```
+
+
+\newpage
+
+```{r select-prior, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=6.5, fig.cap="Estimated survey selectivity (lines) with normal priors derived from BSFRF selectivity experiment data. Points are the mean of the prior at a given size; intervals are 95th quantiles based on input CVs."}
 
 
 #--selectivity----
@@ -1370,7 +1569,7 @@ print(p)
 
 \newpage
 
-```{r predfmort, echo=FALSE, warning=FALSE, message=F, fig.height=10, fig.width=8, fig.cap="Estimated fishing mortalities for the directed and non-directed fisheries."}
+```{r predfmort, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=6.5, fig.cap="Estimated fishing mortalities for the directed and non-directed fisheries."}
 
 # --- 1. Robust Data Extraction across Models ---
 # We loop through all models in reslst to find the correctly named F-dataframe
@@ -1443,7 +1642,7 @@ print(p_f_mort)
 
 \newpage
 
-```{r predmat, echo=FALSE, warning=FALSE, message=F, fig.height=10, fig.width=8, fig.cap="Estimated (black line) or specified (colored lines) probability(s) of maturing for male crab."}
+```{r predmat, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=6.5, fig.cap="Estimated (black line) or specified (colored lines) probability(s) of maturing for male crab."}
 # --- 1. Extract and Process Maturity Data ---
 # case_for_data_table can be a single string or a vector of strings
 plotdat_all <- case_for_data_table %>%
@@ -1509,7 +1708,7 @@ print(p_molt)
 \newpage
 
 
-```{r recruits, echo=FALSE, warning=FALSE, message=F, fig.height=10, fig.width=8, fig.cap="Estimated recruitment by sex (bottom) and proportions recruiting to length bin (top) by model."}
+```{r recruits, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=6.5, fig.cap="Estimated recruitment by sex (bottom) and proportions recruiting to length bin (top) by model."}
 
 
 dfr_m = wtsGMACS::extractRep1Results(reslst,"Summary") |> 
@@ -1539,7 +1738,7 @@ ggplot(plot_dat)+
 
 \newpage
 
-```{r nat-m, echo=FALSE, warning=FALSE, message=F, fig.height=10, fig.width=8, fig.cap="Estimated natural mortality by sex and maturity state. Natural mortality in all years previous to 2018 and after 2019 are equal to the estimated M in 2017."}
+```{r nat-m, echo=FALSE, warning=FALSE, message=F, fig.height=7.5, fig.width=6.5, fig.cap="Estimated natural mortality by sex and maturity state. Natural mortality in all years previous to 2018 and after 2019 are equal to the estimated M in 2017. Note that the y-axis is capped at 5."}
 
 
 # --- 1. Extract and Process Natural Mortality Data ---
@@ -1596,31 +1795,6 @@ p_nat_m <- ggplot(dfrMbyXM_plot, aes(x = year, y = M_value, color = Model, group
 print(p_nat_m)
 
 
-
-```
-
-\newpage
-
-
-```{r predmmb, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=8, fig.cap="Model predicted mature male biomass at mating time in 1,000 tonnes. Dashed horizontal lines are half of the respective BMSY proxies based on B35% of a given management currency (i.e. MSST)."}
-#=========================================================
-#  Plot derived quantities
-#=========================================================
-
-dfr = wtsGMACS::extractRep1Results(reslst,"Summary") |>
-  dplyr::select(case, year, SSB) |>
-  dplyr::rename(MMB = SSB) |>
-  # Coerce only the numeric columns (the previous `across(everything())`
-  # silently turned `case` into NA via as.numeric on the model labels).
-  dplyr::mutate(across(c(year, MMB), as.numeric)) |>
-  dplyr::mutate(case = to_short(case))
-
-#==add reference points back in
-ggplot(dfr)+
-  geom_line(aes(x=year,y=MMB,col=case))+
-  labs(col="Model", x="Year", y="MMB (1,000 t)")+
-  theme_bw()+
-  expand_limits(y=0)
 
 ```
 
