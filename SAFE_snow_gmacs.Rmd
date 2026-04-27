@@ -1,18 +1,20 @@
 ---
 title: "Preliminary 2026 assessment for eastern Bering Sea snow crab"
-author: "Grant Adams"
+author: "Grant Adams and Cody Szuwalski"
 date: "May 2026"
 output:
-  officedown::rdocx_document:
-    base_format: "bookdown::word_document2"
-    number_sections: false
-    fig_caption: true
+  word_document:
     toc: true
   bookdown::pdf_document2:
     fig_caption: true
     fig_height: 4
     fig_width: 6
     number_sections: false
+    toc: true
+  officedown::rdocx_document:
+    base_format: bookdown::word_document2
+    number_sections: false
+    fig_caption: true
     toc: true
 header-includes:
 - \usepackage{geometry}
@@ -95,7 +97,7 @@ report_model <- model_defs[6]
 
 
 # Global Switches
-do_size_comps  <- 0 # Set to 1 to regenerate PNGs (can take time)
+do_size_comps  <- 1 # Set to 1 to regenerate PNGs (can take time)
 do_proj        <- 0 # Set to 1 to process projection files
 make_proj_fig  <- 0 # Set to 1 to generate projection plots
 
@@ -251,9 +253,9 @@ This document is a preliminary stock assessment for eastern Bering Sea (EBS) sno
 
 The 2026 cycle focused on three axes of uncertainty: (1) the influence of *Chionoecetes* hybrids (snow $\times$ Tanner crab) on assessment estimates when included in the survey and/or fishery data; (2) the impact of an updated maturity workflow developed by the Kodiak lab (Ryznar, in prep) that produces a spatiotemporally smoothed probability of terminal molt at size; and (3) attempts to improve model convergence (a bimodal jitter pattern was observed in the September 2025 assessment) using an updated plus group, a corrected total-male composition input, and/or the addition of an immature survey index.
 
-A total of `r length(model_defs)` models are presented. Across the candidate models, point estimates of the directed Tier 3 OFL ranged from approximately 36 to 60 thousand tonnes (kt), with the magnitude driven primarily by whether the immature survey index was included (which had a larger influence on the scale of $B_{MSY}$ and target $F$), whether hybrid catch was added to the directed pot fishery, and whether the new maturity workflow (which has a much weaker temporal trend in the probability of terminal molt at size) was used to specify the time-varying maturity ogive. The status of the stock relative to $B_{MSY}$ in the candidate models was generally between 0.89 and 1.01. No author preferred model or final OFL is recommended at this time -- additional diagnostics, retrospective analyses, and Tier 4 calculations are recommended prior to the September document.
+A total of `r length(model_defs)` models are presented. Across the candidate models, point estimates of the directed Tier 3 OFL ranged from approximately 36 to 60 thousand tonnes (kt), with the magnitude driven primarily by whether the immature survey index was included (which had a larger influence on the scale of $B_{MSY}$ and target $F$), whether hybrid catch was added to the directed pot fishery, and whether the new maturity workflow (which has a much weaker temporal trend in the probability of terminal molt at size) was used to specify the time-varying maturity ogive. The status of the stock relative to $B_{MSY}$ in the candidate models was between 0.89 and 1.01. No author preferred model or final OFL is recommended at this time -- additional diagnostics, retrospective analyses, and Tier 4 calculations are recommended prior to the September document.
 
-The most important result is that the bimodality observed in the 2025 jitter analysis (two clouds of converged models with directed OFLs differing by ~5,000 t) does not persist when the immature survey index is included alongside the updated plus group. However, the immature index version of the model produces a much smaller $B_{MSY}$ proxy and a substantially higher mature male natural mortality that warrants further investigation before September.
+The bimodality observed in the 2025 jitter analysis (two clouds of converged models with directed OFLs differing by ~5,000 t) persists even when the immature survey index is included alongside the updated plus group. Additionally, the majority of models have maximum absolute gradients > 0.001 that is not associated with a single identifiable parameter.
 
 # B. Comments, responses and assessment summary
 ## SSC and CPT comments + author responses from June 2025
@@ -368,9 +370,7 @@ A series of incremental data and structural fixes:
 
 Maturity scenarios:
 
-* **25.1 gmacs (update + new_mat)** -- as 'update', but with the molting probability controls (the time- and size-varying probability of terminal molt) replaced with the array produced by the new maturity workflow developed by the Kodiak lab (E. Ryznar, in prep). The new workflow uses an `sdmTMB` spatiotemporal model fit to chela-based maturity classifications to produce a smoothed probability of being mature at size and location, integrated to a population-level annual ogive. The updated time series shows a much weaker temporal trend in the probability of terminal molt at intermediate sizes (e.g., at 77 mm) than the previous workflow. The updated maturity ogive resulted in differing time-series of mature male survey abundance and mature and immature male composition data. Note that the cv and sample size for both data sets were not adjusted.
-
-@Cody, should immature time-series also vary? Should females also vary?
+* **25.1 gmacs (update + new_mat)** -- as 'update', but with the molting probability controls (the time- and size-varying probability of terminal molt) replaced with the array produced by the new maturity workflow developed by the Kodiak lab (E. Ryznar, in prep). The new workflow uses an `sdmTMB` spatiotemporal model fit to chela-based maturity classifications to produce a smoothed probability of being mature at size and location, integrated to a population-level annual ogive. The updated time series shows a much weaker temporal trend in the probability of terminal molt at intermediate sizes (e.g., at 77 mm) than the previous workflow. The updated maturity ogive resulted in differing time-series of mature male survey abundance and mature and immature male composition data. Note that the cv and sample size for both data sets were not adjusted. The female time series were not updated.
 
 * **25.1 gmacs (update + new_mat + compfix)** -- combination of the comp-fix and the new maturity workflow.
 
