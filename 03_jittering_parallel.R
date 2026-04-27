@@ -130,12 +130,25 @@ jit_summary <- bind_rows(Map(
 unique(jit_summary$scenario)
 
 # --- 5. Plotting ----
-# - OFL
-p <- jit_summary %>%
+# Build a long-form dataset with two views per group: full + zoomed to within
+# 10 NLL of the per-model minimum. Plotted as a 2-row facet_grid (view x model).
+view_levels <- c("All points", "Within 10 NLL of min")
+jit_views <- jit_summary %>%
   filter(negloglike < 0) %>%
-  ggplot(aes(x = negloglike, y = OFL, color = scenario)) +
+  group_by(model) %>%
+  mutate(dnll = negloglike - min(negloglike, na.rm = TRUE)) %>%
+  ungroup()
+
+jit_plot_df <- bind_rows(
+  jit_views %>% mutate(view = view_levels[1]),
+  jit_views %>% filter(dnll <= 10) %>% mutate(view = view_levels[2])
+) %>%
+  mutate(view = factor(view, levels = view_levels))
+
+# - OFL
+p <- ggplot(jit_plot_df, aes(x = negloglike, y = OFL, color = scenario)) +
   geom_point(alpha = 0.6) +
-  facet_wrap(~scenario, scales = "free") +
+  facet_grid(view ~ scenario, scales = "free") +
   theme_bw() +
   labs(title = "Jitter Convergence Check",
        x = "Negative Log-Likelihood",
@@ -144,11 +157,9 @@ ggsave(p, filename = 'plots/jittered_results_ofl.png', height = 8, width = 10, d
 p
 
 # - SSB
-p <- jit_summary %>%
-  filter(negloglike < 0) %>%
-  ggplot(aes(x = negloglike, y = SSB, color = model)) +
+p <- ggplot(jit_plot_df, aes(x = negloglike, y = SSB, color = model)) +
   geom_point(alpha = 0.6) +
-  facet_wrap(~model, scales = "free") +
+  facet_grid(view ~ model, scales = "free") +
   theme_bw() +
   labs(title = "Jitter Convergence Check",
        x = "Negative Log-Likelihood",
@@ -157,11 +168,9 @@ ggsave(p, filename = 'plots/jittered_results_ssb.png', height = 8, width = 10, d
 p
 
 # - R males
-p <- jit_summary %>%
-  filter(negloglike < 0) %>%
-  ggplot(aes(x = negloglike, y = Rmales, color = model)) +
+p <- ggplot(jit_plot_df, aes(x = negloglike, y = Rmales, color = model)) +
   geom_point(alpha = 0.6) +
-  facet_wrap(~model, scales = "free") +
+  facet_grid(view ~ model, scales = "free") +
   theme_bw() +
   labs(title = "Jitter Convergence Check",
        x = "Negative Log-Likelihood",

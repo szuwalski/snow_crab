@@ -18,7 +18,7 @@
 3 # Season recruitment occurs
 3 # Season molting and growth occurs
 3 # Season to calculate SSB (changed to match Feb mating)
-1 # Season for N output
+2 # Season for N output
 # maximum size-class (males then females)
  22 22
 # Group definitions: 4
