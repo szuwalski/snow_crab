@@ -166,15 +166,15 @@ make_jitter_panels <- function(yvar, ylab, group_var) {
 
 # - OFL
 p <- make_jitter_panels("OFL", "OFL (1,000 t)", "model")
-ggsave(p, filename = 'plots/jittered_results_ofl.png', height = 8, width = 15, dpi = 300, units = 'in')
+ggsave(p, filename = 'plots/jittered_results_ofl.png', height = 6, width = 10, dpi = 300, units = 'in')
 p
 
 # - SSB
 p <- make_jitter_panels("SSB", "SSB 2024 (1,000 t)", "model")
-ggsave(p, filename = 'plots/jittered_results_ssb.png', height = 8, width = 15, dpi = 300, units = 'in')
+ggsave(p, filename = 'plots/jittered_results_ssb.png', height = 6, width = 10, dpi = 300, units = 'in')
 p
 
 # - R males
 p <- make_jitter_panels("Rmales", "Male recruitment 2024 (1,000 t)", "model")
-ggsave(p, filename = 'plots/jittered_results_rec.png', height = 8, width = 15, dpi = 300, units = 'in')
+ggsave(p, filename = 'plots/jittered_results_rec.png', height = 6, width = 10, dpi = 300, units = 'in')
 p
