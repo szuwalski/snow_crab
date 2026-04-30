@@ -352,7 +352,7 @@ The key assumptions of these models include:
 
 ## Model scenarios
 
-A total of `r length(model_defs)` models were explored. All models share the same structural assumptions described above and differ only in the version of GMACs, their data inputs, specification of the maturity ogive, and the definition of the plus group. The naming convention reflects an additive series of changes layered onto the September 2025 model ('25.1 gmacs'). 
+A total of `r length(model_defs)` models were explored (Table \@ref(tab:model-overview)). All models share the same structural assumptions described above and differ only in the version of GMACs, their data inputs, specification of the maturity ogive, and the definition of the plus group. The naming convention reflects an additive series of changes layered onto the September 2025 model ('25.1 gmacs'). 
 
 The base ('rolled forward') model:
 
@@ -382,7 +382,7 @@ Hybrid scenarios:
 
 Hybrid catch and composition data were provided by ADF&G (T. Jackson, ADF&G Commercial Fisheries) as a separate species code lumped across opilio-type, bairdi-type, and unspecified hybrids; weights were calculated using snow crab length--weight parameters because the overwhelming majority of hybrids are of the opilio type. These data are *additive* to the existing snow-crab time-series, except for retained catch which already contains hybrids landed under the snow-crab IFQ.
 
-* **25.1 gmacs (update + compfix + plus group + hyb_fishery)** -- the plus-group model with hybrids added to the directed-fishery composition and discard time-series. The CV on directed discards is held at 0.7. The retained male time-series is identical to the snow-crab retained file because retained catch already contains hybrids as they are not separately recorded. Observer non-directed bycatch is unchanged. Note this includes the "compfix" updates.
+* **25.1 gmacs (update + compfix + plus group + hyb_fishery)** -- the "25.1 gmacs (update + compfix + plus group)" model with hybrids added to the directed-fishery composition and discard time-series. The CV on directed discards is held at 0.7. The retained male time-series is identical to the snow-crab retained file because retained catch already contains hybrids as they are not separately recorded. Observer non-directed bycatch is unchanged. Note this includes the "compfix" updates.
 
 * **25.1 gmacs (update + compfix + plus group + hyb_surv)** -- the plus-group model with hybrid catch and composition added to the NMFS summer trawl survey time-series and composition data.
 
@@ -390,7 +390,7 @@ Hybrid catch and composition data were provided by ADF&G (T. Jackson, ADF&G Comm
 
 * **25.1 gmacs (update + compfix + plus group + hyb_both + new_mat)** -- combination of `hyb_both` and the new maturity workflow. Males snow crab and hybrids were apportioned to immature and mature using the new maturity ogive. 
 
-Note that the combination of hybrids and the immature survey were not explored. Both the maturity and hybrid treatment led to small differences in male survey biomass (Figure \@ref(fig:surveyplots)).
+Note that the combination of hybrids and the immature survey were not explored. Time series of data used in the assessment are visualized in (Figures \@ref(fig:indexdataplots), \@ref(fig:catchdataplots), \@ref(fig:compdataplots)). Both the maturity and hybrid treatment led to small differences in male survey biomass (Figure \@ref(fig:surveyplots)).
 
 # D. Analytic approach
 
@@ -403,14 +403,14 @@ The snow crab population dynamics model tracks the number of crab of sex *s*,  m
 
 A lognormal distribution was assumed for all catch and index time-series, while a robust multinomial was assumed for all size composition data. No likelihood weights were used in the assessment.
 
-A 'jittering' approach has been historically used to explore the impact of different starting values on the assessment output (Turnock, 2016). Parameter values were jittered based on a normal distribution centered on one with a standard deviation of 0.1 that was then translated to the parameter space defined by the initial value and its bounds.  One hundred jitters were run for six models that span the range of structural and data choices -- '25.1 gmacs (update + compfix + plus group)', '25.1 gmacs (update + compfix + plus group + new_mat)', '25.1 gmacs (update + compfix + plus group + hyb_both)', '25.1 gmacs (update + compfix + plus group + hyb_both + new_mat)', '25.1 gmacs (update + compfix + plus group + imm_surv)', and '25.1 gmacs (update + compfix + plus group + newmat + imm_surv)'.
+A 'jittering' approach has been historically used to explore the impact of different starting values on the assessment output (Turnock, 2016). Parameter values were jittered based on a normal distribution centered on one with a standard deviation of 0.1 that was then translated to the parameter space defined by the initial value and its bounds.  One hundred jitters were run for six models that span the range of structural and data choices -- '25.1 gmacs (update + compfix + plus group)', '25.1 gmacs (update + compfix + plus group + new_mat)', '25.1 gmacs (update + compfix + plus group + hyb_both)', '25.1 gmacs (update + compfix + plus group + hyb_both + new_mat)', '25.1 gmacs (update + compfix + plus group + imm_surv)', and '25.1 gmacs (update + compfix + plus group + newmat + imm_surv)' (Table \@ref(tab:model-overview)).
 
 ## Model selection and evaluation
 Models were evaluated based on their fit to the data, evidence of non-convergence, the credibility of the estimated population processes, and the strength of the influence of the assumptions of the model on the outcomes of the assessment. Note that for some of the model scenarios, data inputs are different and, therefore, model fits are not directly comparable.
 
 # E. Results
 ## Model convergence and comparison
-All `r length(model_defs)` models presented here inverted their Hessians, but most did not meet the conventional convergence threshold of a maximum absolute gradient < 0.001 (Table \@ref(tab:max-grad)). Only '25.1 gmacs (update + compfix + imm_surv)' fell below that threshold; the remaining 13 models had max |gradient| > 0.001, with '25.1 gmacs (update + compfix + plus group + hyb_both)' the largest at ~0.10. There was no consistent parameter with the highest gradient across models. Likelihood components by category for each candidate model are summarized in Table \@ref(tab:like-comp-tot).
+All `r length(model_defs)` models presented here inverted their Hessians, but most did not meet the conventional convergence threshold of a maximum absolute gradient < 0.001 (Table \@ref(tab:max-grad)). Only '25.1 gmacs (update + compfix + imm_surv)' fell below that threshold; the remaining 13 models had max |gradient| > 0.001, with '25.1 gmacs (update + compfix + plus group + hyb_both)' the largest at ~0.10. There was no consistent parameter with the highest gradient across models. Likelihood components by category for each candidate model are summarized in Table \@ref(tab:like-index-tot), \@ref(tab:like-comp-tot), and \@ref(tab:like-other-tot).
 
 As in past cycles, jittering was used to evaluate sensitivity to starting values. The bimodality in management quantities reported in the 2025 preliminary and final assessments persists in most of the 2026 candidate models. With a range of converged OFLs separated by < 10 negative-log-likelihood units and OFLs that differ by several thousand tonnes (Figure \@ref(fig:jitter)). There is a clear bimodality also visible in the corresponding estimates of 2024 male recruitment (Figure \@ref(fig:jitt-rec)) and 2024 MMB (Figure \@ref(fig:jitt-ssb)). Adding the immature survey index alongside the updated plus group ('25.1 gmacs (update + compfix + plus group + imm_surv)') and new maturity ('25.1 gmacs (update + compfix + plus group + imm_surv + newmat)') eliminates the bimodality, but there is a clear spead in derived quantities within 10 negative-log-likelihood units (Figure \@ref(fig:jitter)). Removing the bimodality is an encouraging diagnostic, but there is still large uncertainty across MMB and male recruitment in 2024, so the apparent fix should not be interpreted as an unqualified improvement. The recent history of bimodality in this assessment, suggests that resolving the underlying source of multiple optima will require further evaluation before September.
 
@@ -631,27 +631,86 @@ Zheng, J., G.H. Kruse, and D.R. Ackley.  2001. Spatial distribution and recruitm
 \blandscape
 <!---BLOCK_LANDSCAPE_START--->
 # K. Tables
-```{r like-comp-tot, echo=FALSE, warning=FALSE, message=F}
+```{r model-overview, echo=FALSE, warning=FALSE, message=F}
+model_overview = data.frame(
+  Model = names(model_shorts),
+  Abr = model_shorts,
+  Jittered = c("n","n","n","Y","n","Y","n","n","Y","Y","n","n","Y","Y")
+)
+
+
+flextable::flextable(model_overview) |>
+  flextable::autofit() |>
+  flextable::set_caption(
+    caption = "Overview of models and model abbreviations: \n
+    u = update, cf = compfix, pg = plus group, imm = immature survey index, nm = new_mat, hs = hyb_surv, hf = hyb_fishery, hb = hyb_both",
+    autonum = officer::run_autonum(seq_id = "tab", pre_label = "Table ", bkm = "model-overview")
+  )
+
+
+```
+
+\newpage
+
+
+
+```{r like-index-tot, echo=FALSE, warning=FALSE, message=F}
 
 extract_likelihoods <- function(path) {
   out_file <- file.path(path, "Gmacsall.out")
-  if (!file.exists(out_file)) return(rep(NA, 9))
-  
+  if (!file.exists(out_file)) return(NULL)
+
   tmp <- readLines(out_file)
-  st  <- grep("Likelihoods_by_type", tmp)[1]
-  end <- grep("EOL", tmp)[1]
-  
-  # Extract the 9 rows following the header
-  rows <- tmp[(st + 1):(end - 1)]
-  
-  # Clean the strings: remove colons and split by one or more spaces
+
+  # Pull the Raw_likelihood vector for a labeled sub-block of
+  # Likelihoods_by_type_and_fleet (e.g. "Catches", "Index", "Size_composition").
+  get_raw <- function(label) {
+    hdr <- grep(paste0("^--", label, ": list"), tmp)[1]
+    if (is.na(hdr)) return(numeric(0))
+    eol_offset <- grep("^>EOL<", tmp[(hdr + 1):length(tmp)])[1]
+    block <- tmp[(hdr + 1):(hdr + eol_offset - 1)]
+    raw <- block[grep("^Raw_likelihood", block)][1]
+    parts <- strsplit(trimws(sub("^Raw_likelihood\\s*:?\\s*", "", raw)), "\\s+")[[1]]
+    as.numeric(parts)
+  }
+
+  catch_lbls <- c("Catch: Pot retained M", "Catch: Pot discarded M",
+                  "Catch: Pot discarded F", "Catch: Trawl bycatch")
+  index_lbls <- c("Index: NMFS 1982 F mature", "Index: NMFS 1989 F mature",
+                  "Index: NMFS 1982 M mature", "Index: NMFS 1989 M mature",)
+  size_lbls  <- c("Size: Pot M retained", "Size: Pot M total", "Size: Pot F discarded",
+                  "Size: Trawl F discarded", "Size: Trawl M discarded",
+                  "Size: NMFS 1982 F immature", "Size: NMFS 1989 F immature",
+                  "Size: NMFS 1982 M immature", "Size: NMFS 1989 M immature",
+                  "Size: NMFS 1982 F mature",   "Size: NMFS 1989 F mature",
+                  "Size: NMFS 1982 M mature",   "Size: NMFS 1989 M mature")
+
+  pad <- function(x, n) { length(x) <- n; x }
+  catch_vals <- pad(get_raw("Catches"),          length(catch_lbls))
+  index_vals <- pad(get_raw("Index"),            length(index_lbls))
+  size_vals  <- pad(get_raw("Size_composition"), length(size_lbls))
+
+  # Other components (SRR, Tag, Growth, Penalties, Priors, ...) still come from
+  # the aggregate Likelihoods_by_type block.
+  st  <- grep("^Likelihoods_by_type: list", tmp)[1]
+  eol_offset <- grep("^>EOL<", tmp[(st + 1):length(tmp)])[1]
+  rows <- tmp[(st + 1):(st + eol_offset - 1)]
   clean_rows <- gsub(":", "", rows)
   parts <- strsplit(trimws(clean_rows), " +")
-  
-  # The numeric value is typically the last element in the line
   vals <- sapply(parts, function(x) as.numeric(tail(x, 1)))
-  cols <- sapply(parts, function(x) x[1])
-  dat <- data.frame(Object = cols, Value = vals)
+  names(vals) <- sapply(parts, function(x) x[1])
+
+  other_keys <- c("Stock_recruitment", "Tagging_data", "Growth_data",
+                  "Penalties", "Priors", "Positive_growth_penalty",
+                  "Total", "Initial_size_structure")
+  other_lbls <- c("SRR", "Tag", "Growth", "Penalties", "Priors",
+                  "Positive_growth_penalty", "Total", "Initial_size_structure")
+  other_vals <- unname(vals[other_keys])
+
+  dat <- data.frame(
+    Object = c(catch_lbls, index_lbls, size_lbls, other_lbls),
+    Value  = c(catch_vals, index_vals, size_vals, other_vals)
+  )
   colnames(dat)[2] <- path
   return(dat)
 }
@@ -660,32 +719,69 @@ extract_likelihoods <- function(path) {
 tot_likes <- lapply(model_defs, extract_likelihoods)
 tot_likes <- tot_likes %>% purrr::reduce(dplyr::full_join)
 
-# Format for the table
-tot_likes$Object[1:5] <- c("Catch", "Index", "Size", "SRR", "Tag")
-tot_likes <- tot_likes[c(1:8, 10:11, 9),]
 tot_likes[is.na(tot_likes)] <- 0
 rownames(tot_likes) <- tot_likes$Object
 tot_likes <- tot_likes[,-1]
 colnames(tot_likes) <- as.character(to_short(names(model_defs)))
 
 # Render with flextable so the caption produces a Word bookmark/sequence
-# field that bookdown's \@ref(tab:like-comp-tot) can resolve.
+# field that bookdown's \@ref(tab:like-comp-tot) can resolve. Transposed so
+# that models are rows and likelihood components are columns to better fit
+# the landscape page.
+tot_likes_t <- as.data.frame(t(signif(tot_likes, 5)), check.names = FALSE)
 tot_likes_df <- data.frame(
-  Component   = rownames(tot_likes),
-  round(tot_likes, 2),
+  Model       = rownames(tot_likes_t),
+  tot_likes_t,
   check.names = FALSE
 )
 
-flextable::flextable(tot_likes_df) |>
+write.csv(tot_likes_t, file = paste0("tot_likes_t_", Sys.Date(), ".csv"))
+
+index_and_catch <- tot_likes_t %>%
+  select(contains("Catch") | contains("Index")) %>%
+  mutate(across(everything(), round, 2))
+index_and_catch <- cbind(data.frame(Model = rownames(tot_likes_t)), index_and_catch)
+
+flextable::flextable(index_and_catch) |>
   flextable::autofit() |>
   flextable::set_caption(
-    caption = "Likelihood components by category and model.",
-    autonum = officer::run_autonum(seq_id = "tab", pre_label = "Table ", bkm = "like-comp-tot")
+    caption = "Catch and index likelihood components by fleet and model.",
+    autonum = officer::run_autonum(seq_id = "tab", pre_label = "Table ", bkm = "like-index-tot")
   )
 
 
 ```
 
+\newpage
+
+```{r like-comp-tot, echo=FALSE, warning=FALSE, message=F}
+comp_like <- tot_likes_t %>%
+  select(contains("Size")) %>%
+  mutate(across(everything(), signif, 4))
+comp_like <- cbind(data.frame(Model = rownames(tot_likes_t)), comp_like)
+
+flextable::flextable(comp_like) |>
+  flextable::autofit() |>
+  flextable::set_caption(
+    caption = "Composition likelihood components by fleet and model.",
+    autonum = officer::run_autonum(seq_id = "tab", pre_label = "Table ", bkm = "like-comp-tot")
+  )
+```
+\newpage
+
+```{r like-other-tot, echo=FALSE, warning=FALSE, message=F}
+other_like <- tot_likes_t %>%
+  select(!(contains("Size") | contains("Catch") | contains("Index"))) %>%
+  mutate(across(everything(), signif, 4))
+other_like <- cbind(data.frame(Model = rownames(tot_likes_t)), other_like)
+
+flextable::flextable(other_like) |>
+  flextable::autofit() |>
+  flextable::set_caption(
+    caption = "Other likelihood components by category and model.",
+    autonum = officer::run_autonum(seq_id = "tab", pre_label = "Table ", bkm = "like-other-tot")
+  )
+```
 \newpage
 
 ```{r max-grad, echo=FALSE, warning=FALSE, message=F}
@@ -1098,9 +1194,110 @@ pander::pander(
 ```
 
 
-
+\blandscape
+<!---BLOCK_LANDSCAPE_START--->
 # L. Figures
-```{r surveyplots, echo=FALSE, warning=FALSE, message=FALSE, width = 7, height = 10, out.width="100%", fig.cap="Observed male survey biomass for models across hybrid and maturity workflow scenarios."}
+```{r indexdataplots, echo=FALSE, warning=FALSE, message=FALSE, width = 14, height = 6.5, out.width="100%", fig.cap="Time series of index data used in the assessment."}
+index_data <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary")  %>%
+  dplyr::filter(case %in% c("25.1 gmacs (update + compfix + imm_surv)")) %>%
+  distinct(year, fleet, season, sex, maturity) %>%
+  mutate(Fleet_name = paste(fleet, sex, maturity, sep = " / "),
+         Fleet_factor = factor(Fleet_name),
+         Fleet_numeric = as.numeric(Fleet_factor),
+         Data_type = "Index") %>%
+  select(year, Fleet_name, Fleet_factor, Fleet_numeric, Data_type) %>%
+  arrange(Fleet_numeric, year) 
+
+comp_data <- wtsGMACS::extractRep1Results(reslst, "Size_fit_summary")  %>%
+  dplyr::filter(case %in% c("25.1 gmacs (update + compfix + imm_surv)")) %>%
+  distinct(year, fleet, season, comp_type, sex, maturity) %>%
+  mutate(Fleet_name = paste(fleet, comp_type, sex, maturity, sep = " / "),
+         Fleet_factor = factor(Fleet_name),
+         Fleet_numeric = as.numeric(Fleet_factor),
+         Data_type = "Composition")  %>%
+  select(year, Fleet_name, Fleet_factor, Fleet_numeric, Data_type) %>%
+  arrange(Fleet_numeric, year)
+
+catch_data <- wtsGMACS::extractRep1Results(reslst, "Catch_fit_summary")  %>%
+  dplyr::filter(case %in% c("25.1 gmacs (update + compfix + imm_surv)")) %>%
+  distinct(year, fleet, season, sex, type) %>%
+  mutate(Fleet_name = paste(fleet, type, sex, sep = " / "),
+         Fleet_factor = factor(Fleet_name),
+         Fleet_numeric = as.numeric(Fleet_factor),
+         Data_type = "Catch") %>%
+  select(year, Fleet_name, Fleet_factor, Fleet_numeric, Data_type) %>%
+  arrange(Fleet_numeric, year) 
+
+# Index
+p1 <- index_data %>%
+  mutate(year = as.numeric(year)) %>%
+  ggplot(aes(x = year, y = Fleet_numeric, colour = Fleet_factor)) +
+  geom_point() +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "white"),
+    axis.ticks.y = element_blank()
+  ) +
+  labs(
+    x = "Year", 
+    y = "",
+    colour = element_blank(),
+    subtitle = paste(index_data$Data_type[1], "data")
+  )
+p1
+```
+\newpage
+
+```{r catchdataplots, echo=FALSE, warning=FALSE, message=FALSE, width = 14, height = 6.5, out.width="100%", fig.cap="Time series of catch data used in the assessment."}
+# Catch
+p2 <- catch_data %>%
+  mutate(year = as.numeric(year)) %>%
+  ggplot(aes(x = year, y = Fleet_numeric, colour = Fleet_factor)) +
+  geom_point() +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "white"),
+    axis.ticks.y = element_blank()
+  ) +
+  labs(
+    x = "Year", 
+    y = "",
+    colour = element_blank(),
+    subtitle = paste(catch_data$Data_type[1], "data")
+  )
+p2
+```
+
+\newpage
+
+```{r compdataplots, echo=FALSE, warning=FALSE, message=FALSE, width = 14, height = 6.5, out.width="100%", fig.cap="Time series of composition data used in the assessment."}
+
+# Comp
+p3 <- comp_data %>%
+  mutate(year = as.numeric(year)) %>%
+  ggplot(aes(x = year, y = Fleet_numeric, colour = Fleet_factor)) +
+  geom_point() +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "white"),
+    axis.ticks.y = element_blank()
+  ) +
+  labs(
+    x = "Year", 
+    y = "",
+    colour = element_blank(),
+    subtitle = paste(comp_data$Data_type[1], "data")
+  ) +
+  guides(color = guide_legend(nrow = 5))
+p3
+```
+
+\newpage
+
+```{r surveyplots, echo=FALSE, warning=FALSE, message=FALSE, width = 12, height = 7, out.width="100%", fig.cap="Observed male survey biomass for models across hybrid and maturity workflow scenarios."}
 dfrIndxFit_plot <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary")  %>%
   dplyr::filter(case %in% c("25.1 gmacs (update + compfix + imm_surv)", # base
                             "25.1 gmacs (update + compfix + plus group + hyb_surv)", # base + hybrid
@@ -1164,9 +1361,8 @@ p_idx_final <- ggplot() +
 print(p_idx_final)
 ```
 
+\newpage 
 
-\blandscape
-<!---BLOCK_LANDSCAPE_START--->
 ```{r jitter, echo=FALSE, warning=FALSE, message=F, out.width="100%", fig.cap="Directed OFLs resulting from 100 jitter runs for the models that span the structural and data choices presented in this document. Each point is a converged jitter run; clouds separated vertically reflect alternative local optima."}
 
 # Drop the jitter PNG into plots/jittered_ofl.png (produced by 03_jittering_parallel.R).
@@ -1326,22 +1522,20 @@ dfrObs <- dfrImmFit_plot |>
   dplyr::distinct(year, sex, hybrid_status, maturity_status, obs, lba, uba)
 
 # --- 3. Generate the Plot ---
-p_imm_final <- ggplot() +
+p_imm_final <- dfrImmFit_plot %>% 
+  ggplot() +
   geom_line(
-    data = dfrImmFit_plot,
     aes(x = year, y = predicted, colour = model),
     lwd = 0.9,
     alpha = 0.8
   ) +
   geom_errorbar(
-    data = dfrObs,
     aes(x = year, ymin = lba, ymax = uba),
     width = 0.3,
     color = "black",
     alpha = 0.6
   ) +
   geom_point(
-    data = dfrObs,
     aes(x = year, y = obs),
     size = 1.2,
     color = "black"
@@ -1454,12 +1648,15 @@ dfrMnGr = wtsGMACS::extractRep1Results(reslst,"Mean growth") |>
   dplyr::mutate(dplyr::across(3:5,as.numeric)) |>
   dplyr::mutate(case = to_short(case));
 
-ggplot(dfrMnGr)+
-  geom_line(aes(x=premolt_size,y=mean_increment,col=case))+
-  facet_wrap(~sex)+
-  labs(col = "Model") +
-  theme_bw()
+grow_dat<-read.csv("data/grow_dat.csv")
+grow_dat$sex[grow_dat$Sex==1]<-'male'
+grow_dat$sex[grow_dat$Sex==2]<-'female'
 
+ggplot()+
+  geom_line(data=dfrMnGr,aes(x=premolt_size,y=mean_increment,col=case))+
+  geom_point(data=grow_dat,aes(x=Premolt,y=Molt.Inc),alpha=.4)+
+  facet_wrap(~sex)+
+  theme_bw()
 #==add data
 ```
 
@@ -1589,8 +1786,13 @@ p <- ggplot() + expand_limits(y = c(0,1))+
   geom_line(data=use_sel,aes(x=size,y=probability,col=model,linetype=type),lwd=1.1)+
   #geom_pointrange(data=sel_prior,aes(x=size, y=mu, ymax = upper, ymin = lower), col = "black")+
   facet_wrap(~fleet+sex,ncol=1)+theme_bw()+
-  xlab("Carapace width (mm)")+
-  ylab("Selectivity")+theme(legend.position='bottom')
+  theme(legend.position='bottom') +
+  labs(
+    x = "Carapace width (mm)", 
+    y = "Selectivity",
+    linetype = element_blank(),
+    colour = element_blank()
+  )
 
 
 print(p)     
@@ -1604,7 +1806,7 @@ print(p)
 \blandscape
 <!---BLOCK_LANDSCAPE_START--->
 
-```{r predselectfish, echo=FALSE, warning=FALSE, message=F, fig.height=5.5, fig.width=6, fig.cap="Estimated selectivities by fishing fleet and sex for capture and retained catches."}
+```{r predselectfish, echo=FALSE, warning=FALSE, message=F, fig.height=6.5, fig.width=10, fig.cap="Estimated selectivities by fishing fleet and sex for capture and retained catches."}
 
 zBs = wtsGMACS::extractRep1Results(reslst,"size_midpoints")[[1]];
 nZBs = length(zBs);
@@ -1622,9 +1824,13 @@ plot_dat$model <- to_short(plot_dat$model)
 fish_mdf<-filter(plot_dat,fleet%in%c("Pot_Fishery","Trawl_Bycatch"))
 levels(fish_mdf$fleet)[2]<-"Non-directed bycatch"
 fish_mdf$type[fish_mdf$type=="retained"]<-"Retained"
-p <- ggplot(fish_mdf) + expand_limits(y = c(0,1))+
+p <- ggplot(fish_mdf) + 
+  expand_limits(y = c(0,1))+
   geom_line(aes(x=size,y=probability,col=model,linetype=type),lwd=1.15,alpha=.75)+
-  facet_wrap(~fleet+sex)+theme_bw()+theme(legend.position='bottom')
+  facet_wrap(~fleet+sex)+
+  theme_bw()+
+  theme(legend.position='bottom',
+    color = element_blank())
 
 print(p)
 ```
@@ -1632,7 +1838,7 @@ print(p)
 \elandscape
 \newpage
 
-```{r predfmort, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=6.5, fig.cap="Estimated fishing mortalities for the directed and non-directed fisheries."}
+```{r predfmort, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=8, fig.cap="Estimated fishing mortalities for the directed and non-directed fisheries."}
 
 # --- 1. Robust Data Extraction across Models ---
 # We loop through all models in reslst to find the correctly named F-dataframe
@@ -1690,7 +1896,7 @@ p_f_mort <- ggplot(plot_dat, aes(x = Year, y = F_value, color = Model, group = M
     subtitle = "Calculated for the primary fishing season (Season 2)",
     x = "Year",
     y = "Fishing Mortality (F)",
-    color = "Model Scenario"
+    color = element_blank()
   ) +
   theme(
     legend.position = "bottom",
@@ -1843,7 +2049,7 @@ p_nat_m <- ggplot(dfrMbyXM_plot, aes(x = year, y = M_value, color = Model, group
     subtitle = "Focusing on 2018-2019 Mortality Events",
     x = "Year",
     y = "Natural Mortality (M)",
-    color = "Model Scenario"
+    color = element_blank()
   ) +
   ylim(0, 5) +
   # 2x2 grid by Sex and Maturity
@@ -1947,8 +2153,37 @@ make_caption <- function(f) {
   paste0("Model fits (lines) to size composition data (grey bars): ", desc, ".")
 }
 
-for (f in meta$file) {
-  cat("![", make_caption(f), "](", URLencode(f), ")\n\n", sep = "")
+# Initialize trackers with empty strings
+last_fleet <- ""
+last_sex_mat <- ""
+
+for (i in 1:nrow(meta)) {
+  row <- meta[i, ]
+  
+  # 1. Check for Fleet change (## Header)
+  if (row$base_fleet != last_fleet) {
+    # Print the header (cleaning up underscores for readability)
+    cat("\n## Fleet: ", tools::toTitleCase(gsub("_", " ", row$base_fleet)), "\n\n")
+    
+    # Update tracker
+    last_fleet <- row$base_fleet
+    # Reset sex_mat tracker so it prints for the new fleet section 
+    # even if it's the same category as the end of the last fleet
+    last_sex_mat <- "" 
+  }
+  
+  # 2. Check for Sex/Maturity change (### Header)
+  current_sex_mat <- paste(row$sex, "and", row$maturity)
+  if (current_sex_mat != last_sex_mat) {
+    cat("\n### ", tools::toTitleCase(current_sex_mat), "\n\n")
+    last_sex_mat <- current_sex_mat
+  }
+  
+  # 3. Print the Plot
+  cat("![", make_caption(row$file), "](", URLencode(row$file), ")\n\n", sep = "")
+  
+  # Optional: Add page break after every plot, or move this inside the header 
+  # logic if you only want page breaks between fleets.
   cat("\\newpage\n\n")
 }
 
