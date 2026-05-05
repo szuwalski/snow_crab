@@ -93,6 +93,7 @@ source("0-models.R") # Load model definitions
 # Case selection
 case_for_resids     <- "25.1 gmacs (update + compfix + plus group)" # model print size comp residuals for
 case_for_data_table <- c("25.1 gmacs (update + compfix + plus group)", "25.1 gmacs (update + compfix + plus group + hyb_both)")
+case_for_mat_plot <- c("25.1 gmacs (update + compfix + plus group)", "25.1 gmacs (update + compfix + plus group + new_mat)")
 report_model <- model_defs[7]
 
 
@@ -253,7 +254,7 @@ This document is a preliminary stock assessment for eastern Bering Sea (EBS) sno
 
 The 2026 cycle focused on three axes of uncertainty: (1) the influence of *Chionoecetes* hybrids (snow $\times$ Tanner crab) on assessment estimates when included in the survey and/or fishery data; (2) the impact of an updated maturity workflow developed by the Kodiak lab (Ryznar, in prep) that produces a spatiotemporally smoothed probability of terminal molt at size; and (3) attempts to improve model convergence (a bimodal jitter pattern was observed in the September 2025 assessment) using an updated plus group, a corrected total-male composition input, and/or the addition of an immature survey index.
 
-A total of `r length(model_defs)` models are presented. Across the candidate models, point estimates of the directed Tier 3 OFL using morphometrically mature biomass ranged from approximately 36 to 60 thousand tonnes (kt), with the magnitude driven primarily by whether the immature survey index was included (which had a larger influence on the scale of $B_{MSY}$ and target $F$), whether hybrid catch was added to total catch in the the directed pot fishery, and whether the new maturity workflow (which has a much weaker temporal trend in the probability of terminal molt at size) was used to specify the time-varying maturity ogive. For reference, the survey estimate of commercially-preferred male biomass in 2025 was 113 kt.The status of the stock relative to $B_{MSY}$ in the candidate models was between 0.86 and 1.01. No author preferred model or final OFL is recommended at this time -- additional diagnostics, retrospective analyses, and Tier 4 calculations are recommended prior to the September document.
+A total of `r length(model_defs)` models are presented. Across the candidate models, point estimates of the directed Tier 3 OFL using morphometrically mature biomass ranged from approximately 36 to 60 thousand tonnes (kt), with the magnitude driven primarily by whether the immature survey index was included (which had a larger influence on the scale of $B_{MSY}$ and target $F$), whether hybrid catch was added to total catch in the the directed pot fishery, and whether the new maturity workflow (which has a much weaker temporal trend in the probability of terminal molt at size) was used to specify the time-varying maturity ogive. For reference, the survey estimate of commercially-preferred male biomass in 2025 was 23.28 kt.The status of the stock relative to $B_{MSY}$ in the candidate models was between 0.86 and 1.01. No author preferred model or final OFL is recommended at this time -- additional diagnostics, retrospective analyses, and Tier 4 calculations are recommended prior to the September document.
 
 The bimodality observed in the 2025 jitter analysis (two clouds of converged models with directed OFLs differing by ~5,000 t) persists even when the immature survey index is included alongside the updated plus group. Additionally, the majority of models have maximum absolute gradients > 0.001 that is not associated with a single identifiable parameter.
 
@@ -457,11 +458,9 @@ F_{35} & if MMB > B_{35}
 \end{cases}
 \end{equation}$$
 
-Where MMB is the projected morphometrically mature male biomass in the current survey year after fishing at the F~*OFL*~, B~*35%*~ is the mature male biomass at the time of mating resulting from fishing at F~*35%*~, F~*35%*~ is the fishing mortality that reduces the morphometrically mature male biomass per recruit to 35% of unfished levels, and $\alpha$ determines the slope of the descending limb of the harvest control rule (set to 0.1 here). 
+Where MMB is the projected morphometrically mature male biomass in the current survey year after fishing at the F~*OFL*~, B~*35%*~ is the mature male biomass at the time of mating resulting from fishing at F~*35%*~, F~*35%*~ is the fishing mortality that reduces the morphometrically mature male biomass per recruit to 35% of unfished levels, and $\alpha$ determines the slope of the descending limb of the harvest control rule (set to 0.1 here).
 
-In addition to the status quo tier 3 control rule, a variation in which >=95mm carapace width mature male biomass was used as the currency of management is presented here.
-
-Calculated Tier 3 OFLs across the `r length(model_defs)` candidate models ranged from approximately 36 to 60 kt (Table \@ref(tab:stepchange)). Differences in OFLs were a result of differences in estimated MMB and natural mortality. Taking '25.1 gmacs (update + compfix + plus group)' (OFL ~45 kt) as a comparison baseline: the immature-index sensitivities without the new maturity workflow sat at the low end of the range (~36 kt; very small $B_{MSY}$ driven by large estimated $M$); the rolled-forward 2025 reference model and the hybrid sensitivities clustered slightly below to around the baseline (~42--48 kt); the new-maturity sensitivities (without an immature index) sat consistently above the baseline at ~50--52 kt because the weaker temporal trend in the probability of terminal molt makes more crab available at fishery sizes; and the combined immature-index/new-maturity model sat at the top of the range (~60 kt), reflecting the compounding effect of the higher fishable biomass from the new maturity workflow and the very large $F_{MSY}$/$F_{OFL}$ implied when the immature index is added.
+Calculated Tier 3 OFLs across the `r length(model_defs)` candidate models ranged from approximately 36 to 60 kt (Table \@ref(tab:stepchange)). For reference, the survey estimate of commercially-preferred male biomass in 2025 was 23.28 kt. Differences in OFLs were a result of differences in estimated MMB and natural mortality. Taking '25.1 gmacs (update + compfix + plus group)' (OFL ~45 kt) as a comparison baseline: the immature-index sensitivities without the new maturity workflow sat at the low end of the range (~36 kt; very small $B_{MSY}$ driven by large estimated $M$); the rolled-forward 2025 reference model and the hybrid sensitivities clustered slightly below to around the baseline (~42--48 kt); the new-maturity sensitivities (without an immature index) sat consistently above the baseline at ~50--52 kt because the weaker temporal trend in the probability of terminal molt makes more crab available at fishery sizes; and the combined immature-index/new-maturity model sat at the top of the range (~60 kt), reflecting the compounding effect of the higher fishable biomass from the new maturity workflow and the very large $F_{MSY}$/$F_{OFL}$ implied when the immature index is added.
 
 ### Tier 4
 A Tier 4 fallback was not recalculated for this preliminary cycle. For reference, the September 2025 assessment applied Tier 4 HCRs to REMA-smoothed survey biomass estimates of three size ranges: morphometrically mature males, large males (>=95mm), and preferred males (>101mm), with the target biomass set as the 1982-2024 average and target fishing mortality set as 0.27 (the median of the prior on natural mortality). The resulting 2025 OFLs were 28.41 kt, 8.64 kt, and 6.11 kt for morphometric, large, and preferred males, respectively. An updated Tier 4 calculation following the standardized Tier 4 fallback recommended by the October 2024 SSC will be presented in the September 2026.
@@ -1914,7 +1913,7 @@ print(p_f_mort)
 ```{r predmat, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=6.5, fig.cap="Estimated (black line) or specified (colored lines) probability(s) of maturing for male crab."}
 # --- 1. Extract and Process Maturity Data ---
 # case_for_data_table can be a single string or a vector of strings
-plotdat_all <- case_for_data_table %>%
+plotdat_all <- case_for_mat_plot %>%
   purrr::map_dfr(function(case_name) {
     # Access the output list directly
     dat <- reslst$outsLst[[case_name]]$mature_probability
@@ -1935,8 +1934,8 @@ plotdat_all <- case_for_data_table %>%
         # Compact shortname for the legend
         Model = as.character(to_short(case_name)),
         # Logic to separate models with "newmat" (uses long label for the test)
-        Maturity_Source = ifelse(grepl("newmat", case_name, ignore.case = TRUE),
-                                 "New Maturity Data (newmat)",
+        Maturity_Source = ifelse(grepl("new_mat", case_name, ignore.case = TRUE),
+                                 "New Maturity Workflow",
                                  "Standard Maturity Data"),
         width = as.numeric(as.character(width)),
         prob = as.numeric(prob),
@@ -1947,10 +1946,11 @@ plotdat_all <- case_for_data_table %>%
   })
 
 # --- 2. Generate the Split Plot ---
-p_molt <- ggplot(plotdat_all, aes(x = width, y = prob)) +
+p_molt <- plotdat_all %>%
+  mutate(Year = as.numeric(Year)) %>%
+ ggplot(aes(x = width, y = prob, colour = Year_Fact)) +
   # Use group to ensure lines are drawn per Year/Model combination
-  geom_line(aes(col = Year_Fact, group = interaction(Year, Model)), 
-            lwd = 1.1, alpha = 0.7) +
+  geom_line(lwd = 1.1, alpha = 0.7) +
   # Force y-axis from 0 to 1
   scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
   theme_bw() +
@@ -1974,8 +1974,8 @@ print(p_molt)
 
 ```
 
-\newpage
 
+\newpage
 
 ```{r recruits, echo=FALSE, warning=FALSE, message=F, fig.height=8, fig.width=6.5, fig.cap="Estimated recruitment by sex."}
 
