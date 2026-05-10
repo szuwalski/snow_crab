@@ -65,7 +65,7 @@ panderOptions('table.split.table', Inf)
 #  --- Load model results ----
 # Ensure rda_ModelsResLst.RData is in the working directory
 # it contains all the results from '05_buck_read_results.R"
-reslst <- wtsUtilities::getObj("rda_ModelsResLst.RData")
+reslst <- wtsUtilities::getObj("Models/rda_ModelsResLst.RData")
 
 # Extract case names
 cases <- names(reslst$repsLst)

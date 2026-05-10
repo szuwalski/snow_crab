@@ -30,7 +30,7 @@ message("Reading model results for ", length(full_paths), " cases...")
 resLst <- wtsGMACS::readModelResults(full_paths)
 
 # Save the object to the directory where this script is located
-out_file <- file.path(dirDoc, "rda_ModelsResLst.RData")
+out_file <- file.path(dirDoc, "Models/rda_ModelsResLst.RData")
 wtsUtilities::saveObj(resLst, out_file)
 
 message("Done! Model results saved to: ", out_file)

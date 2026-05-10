@@ -10,12 +10,12 @@ library(patchwork)
 source("0-models.R")
 
 # --- 1. Setup ----
-orig_drv <- c("25_gmacs_update_hyb_surv_and_fsh_newmat",
-              "25_gmacs_update_hyb_surv_and_fsh",
-              "25_gmacs_update_plus_group",
-              "25_gmacs_update_newmat_plus_group",
-              "25_gmacs_update_imm_plus_group",
-              "25_gmacs_update_newmat_imm_plus_group")
+orig_drv <- c("Models/25_gmacs_update_hyb_surv_and_fsh_newmat",
+              "Models/25_gmacs_update_hyb_surv_and_fsh",
+              "Models/25_gmacs_update_plus_group",
+              "Models/25_gmacs_update_newmat_plus_group",
+              "Models/25_gmacs_update_imm_plus_group",
+              "Models/25_gmacs_update_newmat_imm_plus_group")
 # Map each folder in orig_drv -> long label -> short name (from 0-models.R)
 mod_names <- unname(model_shorts[
   names(model_defs)[match(paste0(orig_drv, "/"), model_defs)]
