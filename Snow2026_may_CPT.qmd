@@ -219,10 +219,10 @@ GMACS **v2.20.34** (compiled 2026-01-15) for all candidate runs except rolled fo
 - The **plus-group change makes the model run substantially faster** (23 min vs. 29 min) and is the **structural baseline** for most sensitivities.
 
 
+## Total male composition fix
+
 ::: {.columns}
 ::: {.column width="60%"}
-### Total male composition fix
-
 - Small discrepancy between discarded and males composition used in the September 2025 assessment and the version produced by the script that translates the ADF&G files.
 - Re-ran the translation script and replacing the affected total-male composition entries.
 - Effect on management quantities is small.
@@ -260,11 +260,10 @@ ggplot(.df, aes(size, aggObs, colour = Scenario)) +
 :::
 :::
 
-### Plus group at >135 mm CW
+## Plus group at >135 mm CW
 
 ::: {.columns}
 ::: {.column width="60%"}
-
 - Previous model **ignored crab > 135 mm**.
 - Updated plus group lumps all crab > 135 mm into a single bin for:
    - Retained males (n = 278 of 2,239 samples)
@@ -314,14 +313,13 @@ ggplot(.df, aes(size, aggObs, colour = Scenario)) +
 | `25.1e` | update + plus group + imm_surv |`25.1c` + immature  index |
 
 
-### NMFS immature survey biomass index
+## NMFS immature survey biomass index
 
-- Immature index provides **information on immature abundance**.
 - **Removes the bimodality** observed in jitter analyses (see Results).
 - Comes with a **substantially higher estimate of mature male $M$** (> 0.6) that propagates into reference points.
 - Combination of immature index + hybrids was **not explored**.
 
-```{r idx-imm, fig.width=11, fig.height=4.4, out.width="100%"}
+```{r idx-imm, fig.width=8, fig.height=4.4, out.width="100%"}
 # Immature index only enters the model when imm_surv is on; compare scenarios.
 idx_imm <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |>
   dplyr::filter(
@@ -344,16 +342,29 @@ idx_imm <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |>
   ) |>
   dplyr::distinct(Scenario, year, Sex, obs, lba, uba)
 
-ggplot(idx_imm, aes(x = year, y = obs, colour = Scenario)) +
-  geom_errorbar(aes(ymin = lba, ymax = uba), width = 0, linewidth = 1.5,
-                position = position_dodge(width = 0.6), alpha = 0.45) +
-  geom_point(size = 1.3, position = position_dodge(width = 0.6)) +
-  facet_wrap(~Sex, scales = "free_y", ncol = 2) +
-  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.08))) +
-  labs(x = "Year", y = "NMFS immature survey biomass (1,000 t)",
-       colour = NULL,
-       caption = "Immature index introduces a new data source. New maturity workflow shifts crab between mature/immature classifications, so imm_surv data depends on which maturity workflow is used.") +
-  theme_slide(8)
+ggplot(idx_imm, aes(x = year, y = obs, group = Scenario)) + # Added group = Scenario here
+    geom_errorbar(
+        aes(ymin = lba, ymax = uba, colour = Scenario), 
+        width = 0, 
+        linewidth = 1.5,
+        position = position_dodge(width = 1), 
+        alpha = 0.75
+    ) +
+    geom_point(
+        colour = "black", 
+        size = 1.3, 
+        position = position_dodge(width = 1) # Now it knows what to dodge by
+    ) +
+    facet_wrap(~Sex, scales = "free_y", ncol = 2) +
+    scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.08))) +
+    scale_colour_manual(values = c("#af8dc3", "#7fbf7b")) +
+    labs(
+        x = "Year", 
+        y = "NMFS immature survey biomass (1,000 t)",
+        colour = NULL,
+        caption = "Immature index introduces a new data source..."
+    ) +
+    theme_slide(8)
 ```
 
 
@@ -367,27 +378,15 @@ ggplot(idx_imm, aes(x = year, y = obs, colour = Scenario)) +
 | `25.2c` | update + compfix + plus_group + new_mat | `25.1c` + new ogive |
 | `25.2d` | update + compfix + plus_group + new_mat + imm_surv | `25.1c` + new + immature survey |
 
+## New maturity workflow (Kodiak / Ryznar, in prep)
 
-- New workflow: **`sdmTMB` spatiotemporal model** fit to chela-based maturity classifications.
+- **`sdmTMB` spatiotemporal model** fit to chela-based maturity classifications.
 - Borrows information across years and locations; **does not extrapolate** beyond stations with measured crab.
-- New workflow has a **much weaker temporal trend** in $\Pr$(terminal molt) at intermediate sizes than the legacy workflow.
-- Updates affect mature male survey abundance and male composition data; female time series unchanged.
-
-### New maturity workflow (Kodiak / Ryznar, in prep)
-
-
-- Replaces the legacy "fit a curve to chela ratios per year/size" approach with a single **`sdmTMB` spatiotemporal model** fit to chela maturity classifications across all years and stations.
-- Borrows information across years and locations for size bins with sparse chela data.
-- Does not extrapolate the predicted spatial probability surface beyond stations with measured crab.
 - Population-level annual ogive obtained by integrating the predicted surface across stations.
-- **Result:** much weaker temporal trend in $\Pr$(terminal molt) at intermediate sizes.
-   - Legacy: at 77 mm, ~0.2 (early 1990s) $\rightarrow$ ~0.5 (post-2010).
-   - New: ~0.35--0.45 throughout the time series.
-- Updated time series of mature male survey abundance and immature/mature comp data; female time series unchanged.
+- Replaces the legacy "fit a curve to chela ratios per year/size" approach.
+- Has a **much weaker temporal trend** in $\Pr$(terminal molt) at intermediate sizes than the legacy workflow.
+- Updates affect mature male survey abundance and male composition data; female time series unchanged.
 - Sample sizes and CVs of the dependent data **were not adjusted** -- a known limitation.
-
-
-### Maturity ogive -- legacy vs. new workflow
 
 ```{r predmat-ogive, fig.width=11, fig.height=4.8, out.width="100%"}
 # Existing predmat-style plot from SAFE_snow_gmacs.Rmd: probability of terminal
@@ -420,8 +419,6 @@ ggplot(mat_ogive, aes(x = width, y = prob, colour = Year, group = Year)) +
        caption = "Legacy: strong increasing trend through time at intermediate sizes. New (sdmTMB): much weaker temporal trend.") +
   theme_slide(8)
 ```
-
-### P(mature) over time -- 50, 80, 101 mm
 
 ```{r predmat-timeseries, fig.width=11, fig.height=4.6, out.width="100%"}
 # Time series of probability of terminal molt for male crab at 50, 80, and
@@ -463,7 +460,7 @@ ggplot(mat_ts, aes(x = Year, y = prob, colour = Maturity_Source)) +
   theme_slide(8)
 ```
 
-### NMFS survey biomass index -- mature crab (maturity effect)
+## NMFS survey biomass index -- mature crab (maturity effect)
 
 ```{r idx-mature-newmat, fig.width=8, fig.height=4, out.width="100%"}
 # Mature-male/female survey biomass: base vs +new maturity workflow.
@@ -471,39 +468,51 @@ ggplot(mat_ts, aes(x = Year, y = prob, colour = Maturity_Source)) +
 idx_mat_nm <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |>
   dplyr::filter(
     case %in% c(
-      "25.1 gmacs (update + compfix + plus group)",
-      "25.1 gmacs (update + compfix + plus group + new_mat)"
-    ),
-    maturity == "mature"
+      "25.1 gmacs (update + compfix + plus group + imm_surv)",
+      "25.1 gmacs (update + compfix + plus group + new_mat + imm_surv)"
+    )
   ) |>
   dplyr::mutate(
     across(c(year, obs, actual_CV), as.numeric),
     Scenario = dplyr::recode(case,
-      "25.1 gmacs (update + compfix + plus group)"           = "base (old maturity)",
-      "25.1 gmacs (update + compfix + plus group + new_mat)" = "+ new maturity"
+      "25.1 gmacs (update + compfix + plus group + imm_surv)"           = "base (old maturity)",
+      "25.1 gmacs (update + compfix + plus group + new_mat + imm_surv)" = "+ new maturity"
     ),
     Scenario = factor(Scenario,
                       levels = c("base (old maturity)", "+ new maturity")),
     sd_log = sqrt(log(1 + actual_CV^2)),
     lba    = qlnorm(0.05, log(obs), sd_log),
     uba    = qlnorm(0.95, log(obs), sd_log),
-    Sex    = stringr::str_to_title(sex)
+    Sex    = stringr::str_to_title(sex),
+    Maturity    = stringr::str_to_title(maturity)
   ) |>
-  dplyr::distinct(Scenario, year, Sex, obs, lba, uba)
+  dplyr::filter(Sex == "Male") |>
+  dplyr::distinct(Scenario, year, Maturity, Sex, obs, lba, uba)
 
-ggplot(idx_mat_nm, aes(x = year, y = obs, colour = Scenario)) +
-  geom_errorbar(aes(ymin = lba, ymax = uba), width = 0, linewidth = 0.5,
-                position = position_dodge(width = 1), alpha = 0.45) +
-  geom_point(size = 1.3, position = position_dodge(width = 1)) +
-  facet_wrap(~Sex, scales = "free_y", ncol = 2) +
-  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.08))) +
-  labs(x = "Year", y = "NMFS survey biomass (1,000 t)",
-       colour = NULL,
-       caption = "New maturity reclassifies male crab between mature/immature. Female time series are unchanged by new_mat.") +
-  theme_slide(8)
+ggplot(idx_mat_nm, aes(x = year, y = obs, group = Scenario)) + # Added group here
+    geom_errorbar(
+        aes(ymin = lba, ymax = uba, colour = Scenario), # Color mapped only to bars
+        width = 0, 
+        linewidth = 1,
+        position = position_dodge(width = 1), 
+        alpha = 1
+    ) +
+    geom_point(
+        colour = "black", # Points forced to black
+        size = 1.3, 
+        position = position_dodge(width = 1) # Now inherits the group and dodges correctly
+    ) +
+    facet_wrap(~Maturity, scales = "free_y", ncol = 2) +
+    scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.08))) +
+    scale_colour_manual(values = c("#af8dc3", "#7fbf7b")) +
+    labs(
+        x = "Year", 
+        y = "NMFS survey biomass (1,000 t)",
+        colour = NULL,
+        caption = "New maturity reclassifies male crab between mature/immature. Female time series are unchanged by new_mat."
+    ) +
+    theme_slide(8)
 ```
-
-### NMFS survey composition -- mature males (maturity effect)
 
 ```{r comp-survey-newmat, fig.width=11, fig.height=4.7, out.width="100%"}
 # NMFS 1989+ mature-male composition: base vs +new maturity (Axis 3).
@@ -536,7 +545,7 @@ ggplot(surv_nm, aes(x = size, y = aggObs, colour = Scenario)) +
   facet_wrap(~year, ncol = 3) +
   labs(x = "Carapace width (mm)", y = "Observed proportion",
        colour = NULL,
-       caption = "NMFS 1989-present mature-male size composition. New maturity workflow reclassifies which crab fall in the mature pile.") +
+       caption = "NMFS 1989-present mature-male size composition.") +
   theme_slide(8)
 ```
 
@@ -550,22 +559,20 @@ ggplot(surv_nm, aes(x = size, y = aggObs, colour = Scenario)) +
 | `25.3c` | update + compfix + plus_group + hyb_both | `25.1c` + hybrids in both survey and fishery |
 | `25.3d` | update + compfix + plus_group + hyb_both + new_mat | `25.3c` + new maturity workflow |
 
+## Hybrid data: directed-fishery discards
 
 - ADF&G provided hybrid data as a **separate species code** (lumped opilio-, bairdi-, and unspecified-type).
 - Hybrid weights computed using **snow crab L--W parameters** (most hybrids are opilio-type).
-- Hybrid data are **additive** to existing snow-crab time series, **except retained catch** (hybrids already retained under snow IFQ; cannot be separated).
+- Hybrid data are **additive** to existing snow-crab time series
 - CV on directed discards held at 0.7. Observer non-directed bycatch unchanged.
+- Retained hybrids cannot be separated from retained snow crab (hybrids already retained under snow IFQ; cannot be separated).
 
-### Hybrid data: directed-fishery discards
 
 ::: {.columns}
 ::: {.column width="55%"}
 
-
-- ADF&G provided directed-fishery discards lumped across all hybrid types.
 - Adding hybrids to the directed pot fishery **increases discards** in some years -- e.g. legal-male hybrid catch ~18 kt in 1997 and ~15 kt in 1998 (flagged by ADF&G as needing QC).
 - Models accommodate the added discards primarily through changes in **estimated discard fishing mortality**, not selectivity.
-- Retained hybrids cannot be separated from retained snow crab.
 
 :::
 ::: {.column width="45%"}
@@ -613,56 +620,7 @@ ggplot(.sel, aes(x = size, y = probability,
 :::
 :::
 
-### Hybrid data: NMFS summer trawl survey
-
-
-- Hybrid catch and composition data added to the NMFS summer trawl time-series for `Models 25.3b`, `25.3c`, `25.3d`.
-- Visibly **higher predicted survey biomass** in some years (additional hybrid biomass added on top of snow crab); trend through time is unchanged.
-- Hybrid identification quality **decreases further back** in the time series (consistency between ADF&G and NMFS criteria is currently a research priority).
-
-
-```{r selex-trawl-hybsurv, fig.width=10, fig.height=4.4, out.width="100%"}
-# NMFS summer-trawl survey selectivity by era and sex: plus_group vs +hyb_surv
-.zBs  <- wtsGMACS::extractRep1Results(reslst, "size_midpoints")[[1]]
-.nZBs <- length(.zBs)
-
-.sel <- wtsGMACS::extractRep1Results(reslst, "selfcns") |>
-  dplyr::filter(
-    type == "capture",
-    fleet %in% c("NMFS_Trawl_1982", "NMFS_Trawl_1989")
-  ) |>
-  tidyr::pivot_longer(cols = 4 + seq_len(.nZBs),
-                      names_to = "size", values_to = "probability") |>
-  dplyr::mutate(across(c(size, probability), as.numeric))
-names(.sel)[5] <- "case"
-
-.sel <- .sel |>
-  dplyr::filter(case %in% c(
-    "25.1 gmacs (update + compfix + plus group)",
-    "25.1 gmacs (update + compfix + plus group + hyb_surv)"
-  )) |>
-  dplyr::mutate(
-    Scenario = dplyr::recode(case,
-      "25.1 gmacs (update + compfix + plus group)"            = "no hybrids",
-      "25.1 gmacs (update + compfix + plus group + hyb_surv)" = "+ hyb_surv"),
-    Era = dplyr::recode(fleet,
-      "NMFS_Trawl_1982" = "1982-88",
-      "NMFS_Trawl_1989" = "1989-present"),
-    Sex = stringr::str_to_title(sex)
-  )
-
-ggplot(.sel, aes(x = size, y = probability, colour = Scenario)) +
-  geom_line(lwd = 0.8, alpha = 0.85) +
-  facet_grid(Sex ~ Era) +
-  scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
-  labs(x = "Carapace width (mm)", y = "Selectivity",
-       colour = NULL,
-       caption = "NMFS summer-trawl survey selectivity by era and sex.") +
-  theme_slide(8)
-```
-
-
-### Catch data -- retained, discards, bycatch
+## Catch data -- retained, discards, bycatch
 
 ```{r catch-compare, fig.width=11, fig.height=4.6, out.width="100%"}
 # Compare observed catch time-series (retained, directed discards, bycatch)
@@ -698,83 +656,7 @@ ggplot(catch_cmp, aes(x = year, y = obs, colour = Scenario, shape = Scenario)) +
   theme_slide(8)
 ```
 
-### NMFS survey biomass index -- mature crab (hybrid effect)
-
-```{r idx-mature-hyb, fig.width=8, fig.height=4, out.width="100%"}
-# Mature-male/female survey biomass: base vs +hybrid in survey (Axis 4).
-idx_mat_hyb <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |>
-  dplyr::filter(
-    case %in% c(
-      "25.1 gmacs (update + compfix + plus group)",
-      "25.1 gmacs (update + compfix + plus group + hyb_surv)"
-    ),
-    maturity == "mature"
-  ) |>
-  dplyr::mutate(
-    across(c(year, obs, actual_CV), as.numeric),
-    Scenario = dplyr::recode(case,
-      "25.1 gmacs (update + compfix + plus group)"            = "base (snow only)",
-      "25.1 gmacs (update + compfix + plus group + hyb_surv)" = "+ hybrid in survey"
-    ),
-    Scenario = factor(Scenario,
-                      levels = c("base (snow only)", "+ hybrid in survey")),
-    sd_log = sqrt(log(1 + actual_CV^2)),
-    lba    = qlnorm(0.05, log(obs), sd_log),
-    uba    = qlnorm(0.95, log(obs), sd_log),
-    Sex    = stringr::str_to_title(sex)
-  ) |>
-  dplyr::distinct(Scenario, year, Sex, obs, lba, uba)
-
-ggplot(idx_mat_hyb, aes(x = year, y = obs, colour = Scenario)) +
-  geom_errorbar(aes(ymin = lba, ymax = uba), width = 0, linewidth = 0.5,
-                position = position_dodge(width = 1), alpha = 0.45) +
-  geom_point(size = 1.3, position = position_dodge(width = 1)) +
-  facet_wrap(~Sex, scales = "free_y", ncol = 2) +
-  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.08))) +
-  labs(x = "Year", y = "NMFS survey biomass (1,000 t)",
-       colour = NULL,
-       caption = "Adding hybrids to the survey index inflates mature biomass by the additional hybrid crab. Trends are unchanged.") +
-  theme_slide(8)
-```
-
-### NMFS survey composition -- mature males (hybrid effect)
-
-```{r comp-survey-hyb, fig.width=11, fig.height=4.7, out.width="100%"}
-# NMFS 1989+ mature-male composition: base vs +hyb_surv (Axis 4).
-years_show <- c(2018, 2021, 2024)
-
-surv_hyb <- wtsGMACS::extractRep1Results(reslst, "Size_fit_summary") |>
-  dplyr::mutate(across(c(year, size, aggObs), as.numeric)) |>
-  dplyr::filter(
-    case %in% c(
-      "25.1 gmacs (update + compfix + plus group)",
-      "25.1 gmacs (update + compfix + plus group + hyb_surv)"
-    ),
-    fleet == "NMFS_Trawl_1989",
-    sex == "male", maturity == "mature",
-    year %in% years_show
-  ) |>
-  dplyr::mutate(
-    Scenario = dplyr::recode(case,
-      "25.1 gmacs (update + compfix + plus group)"            = "base (snow only)",
-      "25.1 gmacs (update + compfix + plus group + hyb_surv)" = "+ hybrid in survey"
-    ),
-    Scenario = factor(Scenario,
-                      levels = c("base (snow only)", "+ hybrid in survey"))
-  ) |>
-  dplyr::distinct(Scenario, year, size, aggObs)
-
-ggplot(surv_hyb, aes(x = size, y = aggObs, colour = Scenario)) +
-  geom_line(alpha = 0.85, lwd = 0.6) +
-  geom_point(size = 0.8, alpha = 0.7) +
-  facet_wrap(~year, ncol = 3) +
-  labs(x = "Carapace width (mm)", y = "Observed proportion",
-       colour = NULL,
-       caption = "NMFS 1989-present mature-male size composition. Hybrids inflate the larger size bins.") +
-  theme_slide(8)
-```
-
-### Pot fishery composition -- hybrid effect
+## Pot fishery composition -- hybrid effect
 
 ```{r comp-pot-hyb, fig.width=11, fig.height=4.7, out.width="100%"}
 # Pot-fishery total-male composition: base (plus group) vs +hyb_fishery (Axis 4).
@@ -810,7 +692,7 @@ ggplot(pot_hyb, aes(x = size, y = aggObs, colour = Scenario)) +
   theme_slide(8)
 ```
 
-### Pot fishery female discard composition
+## Pot fishery female discard composition
 
 ```{r comp-pot-fem, fig.width=11, fig.height=4.7, out.width="100%"}
 # Observed pot-fishery female discard composition for a few recent years across:
@@ -854,13 +736,157 @@ ggplot(pot_f_cmp, aes(x = size, y = aggObs, colour = Scenario)) +
   theme_slide(8)
 ```
 
+
+## Hybrid data: NMFS summer trawl survey
+
+- Hybrid catch and composition data added to the NMFS summer trawl time-series for `Models 25.3b`, `25.3c`, `25.3d`.
+- Visibly **higher predicted survey biomass** in some years; trend through time is unchanged.
+- Hybrid identification quality **decreases further back** in the time series (consistency between ADF&G and NMFS criteria is currently an issue).
+
+
+```{r selex-trawl-hybsurv, fig.width=10, fig.height=4.4, out.width="100%"}
+# NMFS summer-trawl survey selectivity by era and sex: plus_group vs +hyb_surv
+.zBs  <- wtsGMACS::extractRep1Results(reslst, "size_midpoints")[[1]]
+.nZBs <- length(.zBs)
+
+.sel <- wtsGMACS::extractRep1Results(reslst, "selfcns") |>
+  dplyr::filter(
+    type == "capture",
+    fleet %in% c("NMFS_Trawl_1982", "NMFS_Trawl_1989")
+  ) |>
+  tidyr::pivot_longer(cols = 4 + seq_len(.nZBs),
+                      names_to = "size", values_to = "probability") |>
+  dplyr::mutate(across(c(size, probability), as.numeric))
+names(.sel)[5] <- "case"
+
+.sel <- .sel |>
+  dplyr::filter(case %in% c(
+    "25.1 gmacs (update + compfix + plus group)",
+    "25.1 gmacs (update + compfix + plus group + hyb_surv)"
+  )) |>
+  dplyr::mutate(
+    Scenario = dplyr::recode(case,
+      "25.1 gmacs (update + compfix + plus group)"            = "no hybrids",
+      "25.1 gmacs (update + compfix + plus group + hyb_surv)" = "+ hyb_surv"),
+    Era = dplyr::recode(fleet,
+      "NMFS_Trawl_1982" = "1982-88",
+      "NMFS_Trawl_1989" = "1989-present"),
+    Sex = stringr::str_to_title(sex)
+  )
+
+ggplot(.sel, aes(x = size, y = probability, colour = Scenario)) +
+  geom_line(lwd = 0.8, alpha = 0.85) +
+  facet_grid(Sex ~ Era) +
+  scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
+  labs(x = "Carapace width (mm)", y = "Selectivity",
+       colour = NULL,
+       caption = "NMFS summer-trawl survey selectivity by era and sex.") +
+  theme_slide(8)
+```
+
+
+## NMFS survey biomass index -- mature crab (hybrid effect)
+
+```{r idx-mature-hyb, fig.width=8, fig.height=4, out.width="100%"}
+# Mature-male/female survey biomass: base vs +hybrid in survey (Axis 4).
+idx_mat_hyb <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |>
+  dplyr::filter(
+    case %in% c(
+      "25.1 gmacs (update + compfix + plus group)",
+      "25.1 gmacs (update + compfix + plus group + hyb_surv)"
+    ),
+    maturity == "mature"
+  ) |>
+  dplyr::mutate(
+    across(c(year, obs, actual_CV), as.numeric),
+    Scenario = dplyr::recode(case,
+      "25.1 gmacs (update + compfix + plus group)"            = "base (snow only)",
+      "25.1 gmacs (update + compfix + plus group + hyb_surv)" = "+ hybrid in survey"
+    ),
+    Scenario = factor(Scenario,
+                      levels = c("base (snow only)", "+ hybrid in survey")),
+    sd_log = sqrt(log(1 + actual_CV^2)),
+    lba    = qlnorm(0.05, log(obs), sd_log),
+    uba    = qlnorm(0.95, log(obs), sd_log),
+    Sex    = stringr::str_to_title(sex)
+  ) |>
+  dplyr::distinct(Scenario, year, Sex, obs, lba, uba)
+
+ggplot(idx_mat_hyb, aes(x = year, y = obs, group = Scenario)) + # Added group = Scenario here
+    # 1. Error bars get the Scenario colors
+    geom_errorbar(
+        aes(ymin = lba, ymax = uba, colour = Scenario), 
+        width = 0, 
+        linewidth = 1,
+        position = position_dodge(width = 1)
+    ) +
+    # 2. Points are fixed to black
+    geom_point(
+        colour = "black", 
+        size = 1.3, 
+        position = position_dodge(width = 1) # Now inherits the group and dodges
+    ) +
+    facet_wrap(~Sex, scales = "free_y", ncol = 2) +
+    scale_y_continuous(
+        limits = c(0, NA), 
+        expand = expansion(mult = c(0, 0.08))
+    ) +
+    # 3. Applying the same color palette as the first plot
+    scale_colour_manual(values = c("#af8dc3", "#7fbf7b")) +
+    labs(
+        x = "Year", 
+        y = "NMFS survey biomass (1,000 t)",
+        colour = NULL,
+        caption = "Adding hybrids to the survey index inflates mature biomass by the additional hybrid crab. Trends are unchanged."
+    ) +
+    theme_slide(8)
+```
+
+## NMFS survey composition -- mature males (hybrid effect)
+
+```{r comp-survey-hyb, fig.width=11, fig.height=4.7, out.width="100%"}
+# NMFS 1989+ mature-male composition: base vs +hyb_surv (Axis 4).
+years_show <- c(2018, 2021, 2024)
+
+surv_hyb <- wtsGMACS::extractRep1Results(reslst, "Size_fit_summary") |>
+  dplyr::mutate(across(c(year, size, aggObs), as.numeric)) |>
+  dplyr::filter(
+    case %in% c(
+      "25.1 gmacs (update + compfix + plus group)",
+      "25.1 gmacs (update + compfix + plus group + hyb_surv)"
+    ),
+    fleet == "NMFS_Trawl_1989",
+    sex == "male", maturity == "mature",
+    year %in% years_show
+  ) |>
+  dplyr::mutate(
+    Scenario = dplyr::recode(case,
+      "25.1 gmacs (update + compfix + plus group)"            = "base (snow only)",
+      "25.1 gmacs (update + compfix + plus group + hyb_surv)" = "+ hybrid in survey"
+    ),
+    Scenario = factor(Scenario,
+                      levels = c("base (snow only)", "+ hybrid in survey"))
+  ) |>
+  dplyr::distinct(Scenario, year, size, aggObs)
+
+ggplot(surv_hyb, aes(x = size, y = aggObs, colour = Scenario)) +
+  geom_line(alpha = 0.85, lwd = 0.6) +
+  geom_point(size = 0.8, alpha = 0.7) +
+  facet_wrap(~year, ncol = 3) +
+  labs(x = "Carapace width (mm)", y = "Observed proportion",
+       colour = NULL,
+       caption = "NMFS 1989-present mature-male size composition. Hybrids inflate the larger size bins.") +
+  theme_slide(8)
+```
+
+
 # Convergence and jitter analysis
 
 ## Convergence summary
 
 
 - All 14 models **inverted their Hessians**.
-- **Only `Model 25.1d`** met the conventional threshold of max |gradient| < 0.001.
+- **Only `Model 25.1d`** had a max |gradient| < 0.001.
 - Remaining 13 models had max |gradient| > 0.001; `Model 25.3c` largest at ~0.10.
 - **No consistent parameter** had the highest gradient across models.
 - Likelihood components by category summarized in Tables 2--4 of the document.
@@ -877,30 +903,29 @@ ggplot(pot_f_cmp, aes(x = size, y = aggObs, colour = Scenario)) +
 
 
 ![](plots/jittered_results_ofl.png){height="4.1in"}
- Directed Tier 3 OFL across 100 jitters per model (each point = one converged jitter run).
 
 ## Jitter analysis -- 2024 male recruitment
 
 
 ![](plots/jittered_results_rec.png){height="5.2in"}
- Estimates of male recruitment in 2024 across 100 jitters; vertically separated clouds indicate alternative local optima.
 
 ## Jitter analysis -- 2024 MMB
 
 
 ![](plots/jittered_results_ssb.png){height="5.2in"}
- Estimates of MMB in 2024 across 100 jitters; bimodality dissolves in models that include the immature survey index.
+
 
 ## Interpreting the jitter results
 
 
 - **Adding the immature index alongside the updated plus group eliminates the bimodality** in OFL (`Model 25.1e`, `Model 25.2d`).
 - A clear spread in derived quantities still exists within 10 NLL units, so **don't read this as an unqualified improvement**.
+- Mature male M is > 0.6 for these models
 - Bimodality has been a recurring issue in this assessment for several cycles.
 - Resolving the underlying source of multiple optima will require **further investigation** before September:
   - Which parameter combinations produce the two clouds?
   - Recent recruitment? Mortality events? Selectivity?
-  - Does the immature index *resolve* a real problem or *mask* it?
+  - Should we include the immature index?
 
 # Model fits
 
@@ -909,8 +934,94 @@ ggplot(pot_f_cmp, aes(x = size, y = aggObs, colour = Scenario)) +
 
 - Fits to mature biomass survey indices broadly similar across models.
 - **All data-update candidates have difficulty fitting the terminal-year female biomass.** New maturity workflow shifts dynamics modestly but does not resolve this.
-- Hybrid-survey models have visibly higher predicted survey biomass in some years (additive hybrid biomass) but trends through time are unchanged.
 - Models with the immature survey index fit the new immature index well in recent years -- *except* when paired with the new maturity ogive.
+
+## Model fits -- mature biomass survey index
+
+```{r mmbfits, fig.width=11, fig.height=4.7, out.width="100%"}
+# Model fits to the observed mature biomass survey index, all candidate models
+# except the rolled-forward `25.1 gmacs` reference. Panels facet by sex and by
+# maturity workflow so the new-maturity reclassification effect is visible.
+mmbfits <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |>
+  dplyr::filter(case != "25.1 gmacs", maturity == "mature") |>
+  dplyr::mutate(across(c(year, obs, actual_CV, prd), as.numeric)) |>
+  dplyr::rename(predicted = prd, model = case) |>
+  dplyr::mutate(
+    maturity_status = ifelse(grepl("new_mat", model, ignore.case = TRUE),
+                             "New maturity", "Old maturity"),
+    hybrid_status = ifelse(grepl("hyb_surv|hyb_both", model, ignore.case = TRUE),
+                              "+ hybrids", "base (snow only)"),
+    model  = to_short(model),
+    sd_log = sqrt(log(1 + actual_CV^2)),
+    lba    = qlnorm(0.05, log(obs), sd_log),
+    uba    = qlnorm(0.95, log(obs), sd_log),
+    Sex    = stringr::str_to_title(sex)
+  )
+
+obs_mmb <- mmbfits |>
+  dplyr::distinct(year, Sex, maturity_status, hybrid_status, obs, lba, uba)
+
+ggplot() +
+  geom_line(data = mmbfits,
+            aes(x = year, y = predicted, colour = model),
+            lwd = 0.7, alpha = 0.85) +
+  geom_errorbar(data = mmbfits,
+                aes(x = year, ymin = lba, ymax = uba),
+                width = 0, alpha = 0.5, colour = "black") +
+  geom_point(data = mmbfits,
+             aes(x = year, y = obs),
+             size = 0.9, colour = "black") +
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.08))) +
+  facet_grid(Sex ~ maturity_status + hybrid_status, scales = "free_y") +
+  labs(x = "Year", y = "NMFS mature survey biomass (1,000 t)",
+       colour = "Model",
+       caption = "Points/bars: observations + 95% lognormal CI. Lines: model fits. Reference model 25 excluded.") +
+  theme_slide(8) +
+  theme(legend.text = element_text(size = 7))
+```
+
+## Model fits -- immature biomass survey index
+
+```{r immfits, fig.width=11, fig.height=4.7, out.width="100%"}
+# Model fits to the observed immature biomass survey index. Only models with
+# the immature index contribute predictions; observations differ between the
+# old- and new-maturity workflows.
+immfits <- wtsGMACS::extractRep1Results(reslst, "Index_fit_summary") |>
+  dplyr::filter(case != "25.1 gmacs", maturity == "immature") |>
+  dplyr::mutate(across(c(year, obs, actual_CV, prd), as.numeric)) |>
+  dplyr::rename(predicted = prd, model = case) |>
+  dplyr::mutate(
+    maturity_status = ifelse(grepl("new_mat", model, ignore.case = TRUE),
+                             "New maturity", "Old maturity"),
+    model  = to_short(model),
+    sd_log = sqrt(log(1 + actual_CV^2)),
+    lba    = qlnorm(0.05, log(obs), sd_log),
+    uba    = qlnorm(0.95, log(obs), sd_log),
+    Sex    = stringr::str_to_title(sex)
+  )
+
+obs_imm <- immfits |>
+  dplyr::distinct(year, Sex, maturity_status, obs, lba, uba)
+
+ggplot() +
+  geom_line(data = immfits,
+            aes(x = year, y = predicted, colour = model),
+            lwd = 0.7, alpha = 0.85) +
+  geom_errorbar(data = obs_imm,
+                aes(x = year, ymin = lba, ymax = uba),
+                width = 0, alpha = 0.5, colour = "black") +
+  geom_point(data = obs_imm,
+             aes(x = year, y = obs),
+             size = 0.9, colour = "black") +
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.08))) +
+  facet_grid(Sex ~ maturity_status, scales = "free_y") +
+  labs(x = "Year", y = "NMFS immature survey biomass (1,000 t)",
+       colour = "Model",
+       caption = "Only imm_surv models contribute predictions. New maturity workflow shifts observed immature biomass between mature/immature classes.") +
+  theme_slide(8) +
+  theme(legend.text = element_text(size = 7))
+```
+
 
 ## Fits to size composition data -- key impressions
 
@@ -921,18 +1032,32 @@ ggplot(pot_f_cmp, aes(x = size, y = aggObs, colour = Scenario)) +
 - **Non-directed fishery:** some of the largest misfits (single estimated selectivity, time-varying fishery behavior). Sample sizes assumed = 100 except 2021 and 2024 (=10).
 - **Survey size composition:** broadly similar fits across models. Persistent misfits for **immature females in 2009 and 2019** -- could reflect unmodeled size-based mortality or time-varying probability of terminal molt.
 
-## Total-male comp fits, hybrid vs. non-hybrid
 
 
-![](plots/size_comp_plot_41_Pot_fishery_compfix_male_total_undetermined_New_maturity.png){height="5.9in"}
+### Retained-male comp fits, across `compfix` models
 
- Pot fishery total-male composition fits (compfix base, new maturity); hybrid models fit the larger size bins more closely.
-
-## Example: NMFS survey selectivity
+![](plots/size_comp_plot_43_Pot_fishery_compfix_male_retained_undetermined_Old maturity.png){height="5.9in"}
 
 
-![](plots/survey_selex.png){height="5.2in"}
- Estimated NMFS summer-trawl survey selectivity by era and sex with BSFRF-derived priors. Recent-era estimates are similar across models.
+
+### Total-male comp fits, hybrid vs. non-hybrid
+
+
+![](plots/size_comp_plot_38_Pot_Fishery_male_total_undetermined_Old maturity.png){height="5.9in"}
+
+![](plots/size_comp_plot_35_Pot_Fishery_male_total_undetermined_New maturity.png){height="5.9in"}
+
+
+
+### NMFS-immature female comp fits, old vs. new-maturity
+
+
+![](plots/size_comp_plot_21_NMFS_Trawl_1989_female_discarded_immature_Old maturity.png){height="5.9in"}
+
+
+![](plots/size_comp_plot_17_NMFS_Trawl_1989_female_discarded_immature_New maturity.png){height="5.9in"}
+
+
 
 # Estimated population processes and management
 
@@ -973,7 +1098,6 @@ ggplot(pot_f_cmp, aes(x = size, y = aggObs, colour = Scenario)) +
 ## Estimated male $M$ in 2024 across models
 
 ```{r m-table-2024}
-#| tbl-cap: "Estimated natural mortality (M) for immature and mature males in 2024 across the candidate models. Note: y-axis caps differ; immature-survey models produce substantially higher mature-male M."
 m_2024 <- wtsGMACS::extractRep1Results(reslst, "Natural_mortality-by-class") |>
   tidyr::pivot_longer(cols = -c(case, year, sex, maturity),
                       names_to = "size", values_to = "M") |>
@@ -996,7 +1120,6 @@ knitr::kable(m_2024, align = c("l", "r", "r"))
 ```
 
 ## MMB time series
-
 
 - Trends in MMB are **similar across models**; **scales differ by up to ~50%** in some years.
 - Status (Bcurr/$B_{MSY}$) ranges 0.86--1.01 across the candidate set.

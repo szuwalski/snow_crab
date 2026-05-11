@@ -98,7 +98,7 @@ report_model <- model_defs[7]
 
 
 # Global Switches
-do_size_comps  <- 0 # Set to 1 to regenerate PNGs (can take time)
+do_size_comps  <- 1 # Set to 1 to regenerate PNGs (can take time)
 do_proj        <- 0 # Set to 1 to process projection files
 make_proj_fig  <- 0 # Set to 1 to generate projection plots
 
@@ -114,12 +114,14 @@ if(do_size_comps==1){
     dplyr::mutate(
       fleet = dplyr::case_when(
         grepl("compfix", case, ignore.case = TRUE) & fleet == "Pot_Fishery" ~ "Pot_fishery_compfix",
-        grepl("plus group", case, ignore.case = TRUE) & fleet == "Pot_Fishery" ~ "Pot_fishery_plus_group",
-        grepl("hyb_fishery|hyb_both", case, ignore.case = TRUE) & fleet == "Pot_Fishery" ~ "Pot_fishery_hybrid",
         grepl("hyb_surv|hyb_both", case, ignore.case = TRUE) & fleet == "NMFS_Trawl_1982" ~ "NMFS_Trawl_1982_hybrid",
         grepl("hyb_surv|hyb_both", case, ignore.case = TRUE) & fleet == "NMFS_Trawl_1989" ~ "NMFS_Trawl_1989_hybrid",
         .default = fleet
       ),
+      fleet = ifelse(
+        grepl("plus group", case, ignore.case = TRUE) & fleet == "Pot_Fishery", "Pot_fishery_plus_group", fleet),
+      fleet = ifelse(
+        grepl("hyb_fishery|hyb_both", case, ignore.case = TRUE) & fleet == "Pot_Fishery", "Pot_fishery_hybrid", fleet),
     maturity_ogive = ifelse(grepl("new_mat", case, ignore.case = TRUE), 
                            "New maturity", 
                            "Old maturity"),
