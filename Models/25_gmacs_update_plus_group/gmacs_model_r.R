@@ -3,13 +3,37 @@
 ## Model: 25_gmacs_update_plus_group
 ## Target objective function value: -19193.5921
 ## =============================================================================
-## This script reimplements the ADMB GMACS model in pure R, using parameter
-## estimates from gmacs.par and observed data from gmacs_in.dat / Gmacsall.out.
-## All likelihood components are computed and summed to reproduce the total OFV.
+## INPUT SOURCES (only these feed the likelihood):
+##   PARAMETERS (estimates from gmacs.par; hard-coded numeric values below):
+##     - log_Rbar, sigmaR, rho, ra, rb              (Section 7)
+##     - logN_init for each of 4 groups (88 values) (Section 6)
+##     - alpha, beta, gscale (growth)               (Section 3)
+##     - M_base values + block deviations           (Section 5)
+##     - All selectivity / retention parameters     (Section 8)
+##     - log_fbar, log_fdev, log_foff, log_fdov     (Section 9)
+##     - rec_dev, logit_rec_prop                    (Section 7)
+##
+##   DATA (loaded directly from 25_snow_update_plus_group.dat):
+##     - Catch observations / CVs (4 frames)        (Section 11)
+##     - Survey index observations / CVs            (Section 11)
+##     - Size composition observations / Nsamp      (Section 14)
+##     - Growth increment observations              (Section 15)
+##
+##   CONFIG (from the .ctl/.dat files, hard-coded here):
+##     - Size class structure, weight-at-length, maturity ogive
+##     - Season proportions of M, recruitment timing
+##     - Block structures for M and maturity ogive
+##
+## PREDICTIONS (all computed by R functions from the above inputs):
+##     - Population numbers-at-length d4_N(ig, year, season)
+##     - Predicted catches, indices, size compositions, growth increments
+##
+## Gmacsall.out is used ONLY for displaying ADMB target values for comparison.
+## NO predicted quantities are imported from ADMB output.
 ## =============================================================================
 
 # -----------------------------------------------------------------------
-# SECTION 1: SIZE STRUCTURE AND DIMENSIONS
+# SECTION 1: SIZE STRUCTURE AND DIMENSIONS  [CONFIG: from .dat]
 # -----------------------------------------------------------------------
 nclass    <- 22
 years_all <- 1982:2024
@@ -26,7 +50,8 @@ nseasons     <- 3
 m_prop <- c(0.62, 0.01, 0.37)
 
 # -----------------------------------------------------------------------
-# SECTION 2: WEIGHT-AT-LENGTH (units: 1000_mt per million animals)
+# SECTION 2: WEIGHT-AT-LENGTH + MATURITY  [DATA: from .ctl]
+# (units: 1000_mt per million animals)
 # -----------------------------------------------------------------------
 wt_male <- c(7.66e-6, 1.29e-5, 2.00e-5, 2.95e-5, 4.17e-5, 5.68e-5, 7.53e-5,
              9.7455e-5, 1.23688e-4, 1.54329e-4, 1.89739e-4, 2.30279e-4,
@@ -97,7 +122,7 @@ mat_female_yr <- matrix(
 )
 
 # -----------------------------------------------------------------------
-# SECTION 3: GROWTH PARAMETERS AND TRANSITION MATRIX
+# SECTION 3: GROWTH  [PARAMETERS from gmacs.par G_pars_est]
 # -----------------------------------------------------------------------
 # Growth type 4 (GROWTH_SIZEGAMMA): post-molt size is gamma distributed
 # Increment type 1 (linear): molt_inc = alpha - beta*L
@@ -134,18 +159,20 @@ gt_male   <- build_growth_matrix(alpha[1], beta[1], gscale[1])
 gt_female <- build_growth_matrix(alpha[2], beta[2], gscale[2])
 
 # -----------------------------------------------------------------------
-# SECTION 4: RECRUITMENT SIZE DISTRIBUTION
+# SECTION 4: RECRUITMENT SIZE DISTRIBUTION  [PARAMETERS: ra, rb from .par]
 # -----------------------------------------------------------------------
 # Type: gamma CDF, ra=32.5, rb=1.0 for both sexes
 # ralpha = ra/rb = 32.5; x[ll] = pgamma(size_breaks[ll]/rb, shape=ralpha)
 # Max rec size class = 3 (recruits only enter classes 1-3)
 build_rec_sdd <- function(ra, rb) {
   ralpha <- ra / rb
-  # Use only the first nclass breakpoints (upper edges of bins 1..22 = 25..130)
-  x <- pgamma(size_breaks[1:nclass] / rb, shape = ralpha, rate = 1)
-  raw <- diff(c(0, x))     # length = nclass = 22
+  # GMACS: cumulative gamma at ALL nclass+1 breakpoints, then first_difference
+  # gives P(lower edge < X <= upper edge) per bin (length nclass).
+  x <- pgamma(size_breaks / rb, shape = ralpha, rate = 1)  # nclass+1 = 23 values
+  raw <- diff(x)                                            # nclass = 22 bins
   raw[raw < 0] <- 0
-  # Zero out classes > 3 (recruits only enter small size classes)
+  # Compress mass above nSizeClassRec (=3) into class 3 — matches TPL behavior?
+  # TPL just zeros out bins > nSizeClassRec without redistributing; renormalize.
   raw[4:nclass] <- 0
   total <- sum(raw)
   if (total > 0) raw <- raw / total
@@ -156,7 +183,8 @@ rec_sdd_male   <- build_rec_sdd(32.5, 1.0)
 rec_sdd_female <- build_rec_sdd(32.5, 1.0)
 
 # -----------------------------------------------------------------------
-# SECTION 5: NATURAL MORTALITY (block-structured by year)
+# SECTION 5: NATURAL MORTALITY  [PARAMETERS: M_pars_est from gmacs.par]
+# (block-structured by year)
 # -----------------------------------------------------------------------
 # Base M values
 M_base_male_mat   <- 0.285054203583
@@ -204,7 +232,7 @@ for (ty in 1:nyears) {
 }
 
 # -----------------------------------------------------------------------
-# SECTION 6: INITIAL CONDITIONS (from gmacs.par T_pars_est[11:98])
+# SECTION 6: INITIAL N AT LENGTH  [PARAMETERS: T_pars_est[11:98]]
 # -----------------------------------------------------------------------
 logN_init <- list(
   male_mat = c(9.61621304212,9.62679552352,9.66306989395,9.78285024646,
@@ -233,7 +261,7 @@ logN_init <- list(
 )
 
 # -----------------------------------------------------------------------
-# SECTION 7: RECRUITMENT PARAMETERS
+# SECTION 7: RECRUITMENT  [PARAMETERS: log_Rbar, sigmaR, rho, rec_dev, logit_rec_prop]
 # -----------------------------------------------------------------------
 log_Rbar       <- 14.38922529
 sigmaR         <- exp(-0.9)  # = 0.40656966
@@ -264,33 +292,33 @@ logit_rec_prop <- c(2.53604707305, 0.822539249053, -0.328223066359, -1.054172210
                     0.545964091807, -0.0186328905323, 3.63603967250)
 
 # -----------------------------------------------------------------------
-# SECTION 8: SELECTIVITY PARAMETERS
+# SECTION 8: SELECTIVITY  [PARAMETERS: S_pars_est from gmacs.par]
 # -----------------------------------------------------------------------
-# Logistic selectivity: plogis(log(L/exp(mu)) / cv) style
-# S_pars_est[1..4] = logistic params for pot male, trawl male
-# S_pars_est[1]=4.66558963236 = ln(mean_pot_male)
-# S_pars_est[2]=1.65809822968 = ln(cv_pot_male)
-# S_pars_est[3]=4.77730466004 = ln(mean_trawl_male)
-# S_pars_est[4]=2.38572646596 = ln(cv_trawl_male)
+# GMACS standard logistic (SELEX_STANLOGISTIC, ctl type=2):
+#   sel(L) = plogis((L - mu) / sigma)  where mu=exp(p1), sigma=exp(p2)
+# Then normalized so max(sel)=1 when slx_max_at_1_in=1 (pot + trawl gears)
+# (See gmacs.tpl plogis() and `if (slx_max_at_1_in==1) selx -= selx(nclass);`)
+#
+# S_pars_est[1..4]: pot male (4.666, 1.658), trawl male (4.777, 2.386)
+# S_pars_est[49..50]: pot female (4.215, 0.990)
+# S_pars_est[95..96]: pot retention male (4.596, 0.304)
 
-logistic_sel <- function(midpts, log_mean, log_cv) {
+logistic_sel_raw <- function(midpts, log_mean, log_sd) {
   mu <- exp(log_mean)
-  cv <- exp(log_cv)
-  1 / (1 + exp(-(log(midpts / mu) / cv)))
+  sd <- exp(log_sd)
+  1 / (1 + exp(-(midpts - mu) / sd))
 }
 
-slx_cap_male_pot   <- logistic_sel(mid_points, 4.66558963236, 1.65809822968)
-slx_cap_male_trawl <- logistic_sel(mid_points, 4.77730466004, 2.38572646596)
+# normalize so max == 1 (max_at_1=1)
+norm_max1 <- function(sel) sel / max(sel)
 
-# Female pot/trawl
-# S_pars_est[49]=4.21489152830, [50]=0.989652399376
-slx_cap_fem_pot   <- logistic_sel(mid_points, 4.21489152830, 0.989652399376)
-slx_cap_fem_trawl <- slx_cap_male_trawl  # trawl female same logistic as male? No - same FM but different sel
-# Actually female trawl uses same selectivity curve parameters as male per Gmacsall.out:
-# S_pars_est[95]=4.59584328714 (ret pot male mean), [96]=0.304218601686 (ret pot male cv)
-# For female trawl - from Gmacsall.out there's no separate female trawl selectivity block
-# The model uses same male trawl selectivity for females (confirmed by "mirror" in model config)
-slx_cap_fem_trawl <- slx_cap_male_trawl
+slx_cap_male_pot   <- norm_max1(logistic_sel_raw(mid_points, 4.66558963236, 1.65809822968))
+slx_cap_male_trawl <- norm_max1(logistic_sel_raw(mid_points, 4.77730466004, 2.38572646596))
+
+# Female pot uses its own logistic (sex-specific=1 for pot)
+slx_cap_fem_pot    <- norm_max1(logistic_sel_raw(mid_points, 4.21489152830, 0.989652399376))
+# Female trawl mirrors male trawl (sex-specific=0 for trawl)
+slx_cap_fem_trawl  <- slx_cap_male_trawl
 
 # NMFS 1982 male selectivity: free parameters (log-scale), exponentiated
 # S_pars_est[5:26] = log-selectivity for 22 classes
@@ -329,14 +357,15 @@ s_nmfs89_fem_log <- c(-4.17334702546, -3.28855434287, -2.68161667805, -1.0069211
                        -0.0805122004493, -0.000100005000333)
 slx_cap_fem_nmfs89 <- exp(s_nmfs89_fem_log)
 
-# Retained selectivity (pot male only)
+# Retained selectivity (pot male only). Retention type=2 (logistic), NOT normalized
+# (slx_max_at_1_in only read for capture, retention rows default to 0 in TPL).
 # S_pars_est[95]=4.59584328714, [96]=0.304218601686
-slx_ret_male_pot <- logistic_sel(mid_points, 4.59584328714, 0.304218601686)
+slx_ret_male_pot <- logistic_sel_raw(mid_points, 4.59584328714, 0.304218601686)
 # All other retained = 0
 slx_ret_zero <- rep(0, nclass)
 
 # -----------------------------------------------------------------------
-# SECTION 9: FISHING MORTALITY - compute from par file parameters
+# SECTION 9: FISHING MORTALITY  [PARAMETERS: log_fbar, log_fdev, log_foff, log_fdov]
 # -----------------------------------------------------------------------
 # FM = exp(log_fbar + log_fdev) per year
 # Fleet 1 (Pot): log_fbar=-0.215106041952, devs for 1982-2021 + 2024
@@ -418,7 +447,7 @@ for (ty in 1:nyears) {
 }
 
 # -----------------------------------------------------------------------
-# SECTION 10: POPULATION DYNAMICS
+# SECTION 10: POPULATION DYNAMICS  [R FUNCTION — generates all predictions]
 # -----------------------------------------------------------------------
 # State arrays: N[ig, size_class, year] at start of season 1
 # ig: 1=male_mature, 2=male_imm, 3=fem_mature, 4=fem_imm
@@ -458,12 +487,16 @@ run_population <- function() {
     trawl_fem    = matrix(0, nyears, nclass)   # trawl female
   )
 
-  # Survey size comp (numbers)
+  # Survey size comp (numbers at size, sel*N for mature + immature components)
   surv_N <- list(
-    fem82 = matrix(0, nyears + 1, nclass),
-    fem89 = matrix(0, nyears + 1, nclass),
-    mal82 = matrix(0, nyears + 1, nclass),
-    mal89 = matrix(0, nyears + 1, nclass)
+    fem82_mat = matrix(0, nyears + 1, nclass),
+    fem82_imm = matrix(0, nyears + 1, nclass),
+    fem89_mat = matrix(0, nyears + 1, nclass),
+    fem89_imm = matrix(0, nyears + 1, nclass),
+    mal82_mat = matrix(0, nyears + 1, nclass),
+    mal82_imm = matrix(0, nyears + 1, nclass),
+    mal89_mat = matrix(0, nyears + 1, nclass),
+    mal89_imm = matrix(0, nyears + 1, nclass)
   )
 
   for (ty in 1:nyears) {
@@ -488,11 +521,15 @@ run_population <- function() {
     pred_surv_mal82[ty] <- sum(slx_cap_male_nmfs82 * mal_mat_N * wt_male)
     pred_surv_mal89[ty] <- sum(slx_cap_male_nmfs89 * mal_mat_N * wt_male)
 
-    # Survey size comp (numbers at size, weighted by selectivity)
-    surv_N$fem82[ty, ] <- slx_cap_fem_nmfs82 * fem_mat_N
-    surv_N$fem89[ty, ] <- slx_cap_fem_nmfs89 * fem_mat_N
-    surv_N$mal82[ty, ] <- slx_cap_male_nmfs82 * mal_mat_N
-    surv_N$mal89[ty, ] <- slx_cap_male_nmfs89 * mal_mat_N
+    # Survey size comp (numbers at size, weighted by selectivity), mat + imm
+    surv_N$fem82_mat[ty, ] <- slx_cap_fem_nmfs82 * fem_mat_N
+    surv_N$fem82_imm[ty, ] <- slx_cap_fem_nmfs82 * fem_imm_N
+    surv_N$fem89_mat[ty, ] <- slx_cap_fem_nmfs89 * fem_mat_N
+    surv_N$fem89_imm[ty, ] <- slx_cap_fem_nmfs89 * fem_imm_N
+    surv_N$mal82_mat[ty, ] <- slx_cap_male_nmfs82 * mal_mat_N
+    surv_N$mal82_imm[ty, ] <- slx_cap_male_nmfs82 * mal_imm_N
+    surv_N$mal89_mat[ty, ] <- slx_cap_male_nmfs89 * mal_mat_N
+    surv_N$mal89_imm[ty, ] <- slx_cap_male_nmfs89 * mal_imm_N
 
     # Apply season 1 survival (natural mortality only, no fishing)
     M_s1_male_mat <- M_arr[1, ty] * m_prop[1]
@@ -520,26 +557,22 @@ run_population <- function() {
     FS_mal_trawl <- fm_male_trawl[ty]
     FS_fem_trawl <- fm_fem_trawl[ty]
 
-    # For each size class, compute total Z and Baranov catch
-    # Male mature (ig=1)
-    Z_mal_mat <- M_s2_male_mat +
-      FS_mal_pot   * slx_cap_male_pot   +
-      FS_mal_trawl * slx_cap_male_trawl
+    # Discard mortality rates (dmr) per fleet (from gmacs.dat, last column)
+    xi_pot   <- 0.3
+    xi_trawl <- 1.0
 
-    # Male immature (ig=2)
-    Z_mal_imm <- M_s2_male_imm +
-      FS_mal_pot   * slx_cap_male_pot   +
-      FS_mal_trawl * slx_cap_male_trawl
+    # Vulnerability per fleet/sex: vul = sel_cap * (ret + (1-ret)*xi)
+    # Only male pot has retention; everything else has ret = 0.
+    vul_mal_pot   <- slx_cap_male_pot   * (slx_ret_male_pot + (1 - slx_ret_male_pot) * xi_pot)
+    vul_mal_trawl <- slx_cap_male_trawl * xi_trawl
+    vul_fem_pot   <- slx_cap_fem_pot    * xi_pot
+    vul_fem_trawl <- slx_cap_fem_trawl  * xi_trawl
 
-    # Female mature (ig=3)
-    Z_fem_mat <- M_s2_fem_mat +
-      FS_fem_pot   * slx_cap_fem_pot   +
-      FS_fem_trawl * slx_cap_fem_trawl
-
-    # Female immature (ig=4)
-    Z_fem_imm <- M_s2_fem_imm +
-      FS_fem_pot   * slx_cap_fem_pot   +
-      FS_fem_trawl * slx_cap_fem_trawl
+    # Z uses vulnerability (matches TPL calc_total_mortality: Z = m_prop*M + F)
+    Z_mal_mat <- M_s2_male_mat + FS_mal_pot   * vul_mal_pot   + FS_mal_trawl * vul_mal_trawl
+    Z_mal_imm <- M_s2_male_imm + FS_mal_pot   * vul_mal_pot   + FS_mal_trawl * vul_mal_trawl
+    Z_fem_mat <- M_s2_fem_mat  + FS_fem_pot   * vul_fem_pot   + FS_fem_trawl * vul_fem_trawl
+    Z_fem_imm <- M_s2_fem_imm  + FS_fem_pot   * vul_fem_pot   + FS_fem_trawl * vul_fem_trawl
 
     # Survival during season 2
     S_mal_mat <- exp(-Z_mal_mat)
@@ -677,10 +710,14 @@ run_population <- function() {
   pred_surv_fem89[ty_last] <- sum(slx_cap_fem_nmfs89 * N_s_last[3, ] * wt_female)
   pred_surv_mal82[ty_last] <- sum(slx_cap_male_nmfs82 * N_s_last[1, ] * wt_male)
   pred_surv_mal89[ty_last] <- sum(slx_cap_male_nmfs89 * N_s_last[1, ] * wt_male)
-  surv_N$fem82[ty_last, ] <- slx_cap_fem_nmfs82 * N_s_last[3, ]
-  surv_N$fem89[ty_last, ] <- slx_cap_fem_nmfs89 * N_s_last[3, ]
-  surv_N$mal82[ty_last, ] <- slx_cap_male_nmfs82 * N_s_last[1, ]
-  surv_N$mal89[ty_last, ] <- slx_cap_male_nmfs89 * N_s_last[1, ]
+  surv_N$fem82_mat[ty_last, ] <- slx_cap_fem_nmfs82 * N_s_last[3, ]
+  surv_N$fem82_imm[ty_last, ] <- slx_cap_fem_nmfs82 * N_s_last[4, ]
+  surv_N$fem89_mat[ty_last, ] <- slx_cap_fem_nmfs89 * N_s_last[3, ]
+  surv_N$fem89_imm[ty_last, ] <- slx_cap_fem_nmfs89 * N_s_last[4, ]
+  surv_N$mal82_mat[ty_last, ] <- slx_cap_male_nmfs82 * N_s_last[1, ]
+  surv_N$mal82_imm[ty_last, ] <- slx_cap_male_nmfs82 * N_s_last[2, ]
+  surv_N$mal89_mat[ty_last, ] <- slx_cap_male_nmfs89 * N_s_last[1, ]
+  surv_N$mal89_imm[ty_last, ] <- slx_cap_male_nmfs89 * N_s_last[2, ]
 
   list(
     N = N,
@@ -701,76 +738,93 @@ run_population <- function() {
 pop <- run_population()
 
 # -----------------------------------------------------------------------
-# SECTION 11: OBSERVED DATA
+# SECTION 11: OBSERVED DATA  [DATA: catch and survey loaded from .dat]
 # -----------------------------------------------------------------------
 
-## Catch data
-years_pot_obs <- c(1982:2021, 2024)  # 41 years
+dat_path <- if (file.exists("25_snow_update_plus_group.dat")) {
+  "25_snow_update_plus_group.dat"
+} else {
+  "/Users/grantadams/Documents/GitHub/AFSC_assessments/snow_crab/Models/25_gmacs_update_plus_group/25_snow_update_plus_group.dat"
+}
 
-obs_ret_mal_pot <- c(11.8518,12.1623,29.9369,44.4455,46.2231,61.3965,67.7927,
-                     73.3261,149.0722,143.0185,104.6682,67.9448,34.1596,29.7993,
-                     54.2394,110.4399,88.1515,15.1007,11.4561,14.7986,12.8420,
-                     10.8601,11.2909,16.7711,16.4906,28.5890,26.5568,21.7788,
-                     24.6134,40.2929,30.0525,24.4864,30.8178,18.4210,9.7844,
-                     8.6017,12.5093,15.4333,20.4122,2.5166,2.1453)
-cv_s1 <- 0.04
+# Load catch data directly from the dat file (4 frames, 41/41/41/43 rows)
+load_catch_frames <- function(dat_path) {
+  lines <- readLines(dat_path, warn = FALSE)
+  # Find "# Number of rows in each data frame"
+  i_nrow <- grep("Number of rows in each data frame", lines)[1]
+  nrows <- as.integer(strsplit(trimws(lines[i_nrow + 1]), "\\s+")[[1]])
+  frames <- list()
+  i <- i_nrow + 2
+  for (k in seq_along(nrows)) {
+    # Skip comment/blank until first numeric row
+    while (i <= length(lines) && !grepl("^\\s*[0-9]", lines[i])) i <- i + 1
+    n <- nrows[k]
+    rows <- list()
+    for (r in seq_len(n)) {
+      parts <- strsplit(trimws(lines[i]), "\\s+")[[1]]
+      rows[[r]] <- as.numeric(parts[1:11])  # 11 cols: year season fleet sex obs cv type units mult effort dmr
+      i <- i + 1
+    }
+    df <- as.data.frame(do.call(rbind, rows))
+    colnames(df) <- c("year", "season", "fleet", "sex", "obs", "cv",
+                      "type", "units", "mult", "effort", "dmr")
+    frames[[k]] <- df
+  }
+  frames
+}
+catch_frames <- load_catch_frames(dat_path)
+# Frame 1: ret_mal_pot, Frame 2: disc_mal_pot, Frame 3: disc_fem_pot, Frame 4: trawl
+years_pot_obs    <- catch_frames[[1]]$year
+obs_ret_mal_pot  <- catch_frames[[1]]$obs
+cv_s1_vec        <- catch_frames[[1]]$cv
+obs_disc_mal_pot <- catch_frames[[2]]$obs
+cv_s2_vec        <- catch_frames[[2]]$cv
+obs_disc_fem_pot <- catch_frames[[3]]$obs
+cv_s3_vec        <- catch_frames[[3]]$cv
+obs_trawl_both   <- catch_frames[[4]]$obs
+cv_s4            <- catch_frames[[4]]$cv
+cv_s1            <- cv_s1_vec  # all rows same in this model but use exact per-row
+cv_s2            <- cv_s2_vec
+cv_s3            <- cv_s3_vec
+cat(sprintf("Loaded catch frames from .dat: %d/%d/%d/%d rows\n",
+            length(obs_ret_mal_pot), length(obs_disc_mal_pot),
+            length(obs_disc_fem_pot), length(obs_trawl_both)))
 
-obs_disc_mal_pot <- c(1.2665,1.2383,2.7587,4.0147,4.2453,5.5224,5.8167,6.6847,
-                      35.5500,9.0300,21.1800,22.2700,7.7800,14.7300,23.2300,7.1000,
-                      19.5000,4.1300,3.2500,3.9800,4.5000,2.4000,3.5800,0.6200,
-                      4.1700,5.7700,5.1100,4.2800,4.4700,3.7300,5.5300,10.6100,
-                      11.6200,10.9000,4.5100,5.8800,8.6300,15.6100,6.1200,1.6800,
-                      0.6600)
-cv_s2 <- 0.07
+## Survey index data — loaded directly from .dat
+# Row format: Index Year Season Fleet Sex Mature Obs CV Units Timing RAI
+load_survey_data <- function(dat_path) {
+  lines <- readLines(dat_path, warn = FALSE)
+  i_nrow <- grep("Number\\s+of\\s+rows\\s+of\\s+index\\s+data", lines)[1]
+  i <- i_nrow + 1
+  while (i <= length(lines) && !grepl("^\\s*[0-9]", lines[i])) i <- i + 1
+  nrows <- as.integer(strsplit(trimws(lines[i]), "\\s+")[[1]][1])
+  # Skip header rows until first numeric row
+  i <- i + 1
+  while (i <= length(lines) && !grepl("^\\s*[0-9]{4}", trimws(lines[i]))) {
+    # Find first row starting with year (4 digits) followed by data
+    # The first column is Index (1-digit), then Year (4 digits) — so look for pattern
+    if (grepl("^\\s*[0-9]+\\s+[0-9]{4}", lines[i])) break
+    i <- i + 1
+  }
+  rows <- list()
+  for (r in seq_len(nrows)) {
+    parts <- strsplit(trimws(lines[i]), "\\s+")[[1]]
+    rows[[r]] <- as.numeric(parts[1:11])
+    i <- i + 1
+  }
+  df <- as.data.frame(do.call(rbind, rows))
+  colnames(df) <- c("idx", "year", "season", "fleet", "sex", "mature",
+                    "obs", "cv", "units", "timing", "rai")
+  df
+}
+surv_df <- load_survey_data(dat_path)
 
-obs_disc_fem_pot <- c(0.0156,0.0109,0.0108,0.0109,0.0239,0.0346,0.0368,0.0478,
-                      1.5227,0.1999,0.2783,0.1156,0.0781,0.0213,0.1006,0.0990,
-                      0.0076,0.0080,0.0009,0.0160,0.0018,0.0008,0.0015,0.0035,
-                      0.0012,0.0184,0.0174,0.0124,0.0100,0.1909,0.0571,0.1157,
-                      0.2989,0.1150,0.0332,0.0280,0.0222,0.0214,0.0008,0.0000,
-                      0.0000)
-cv_s3 <- 0.07
-
-obs_trawl_both <- c(0.3673,0.4733,0.5029,0.4317,0.0001,0.0028,0.0019,0.1002,
-                    0.3316,4.4512,2.0499,1.1260,0.6994,1.0440,1.2235,0.7265,
-                    0.5787,0.2422,0.2472,0.1813,0.1045,0.1363,0.1795,0.1887,
-                    0.3633,0.3061,0.1891,0.3888,0.1381,0.1396,0.1504,0.1621,
-                    0.6174,1.5819,0.0351,0.1012,0.4014,0.2105,0.1932,0.1295,
-                    0.0604,0.1072,0.0925)
-cv_s4 <- c(rep(0.20, 4), 0.20, 0.20, 0.20, 0.20, rep(0.10, 35))
-
-## Survey data
-# Series 1: NMFS82 female mature, years 1982-1988
-surv1_years <- 1982:1988
-surv1_obs <- c(141.49, 82.18, 39.37, 5.89, 15.17, 119.55, 165.62)
-surv1_cv  <- c(0.1580, 0.2030, 0.2000, 0.2150, 0.2090, 0.1890, 0.1770)
-
-# Series 2: NMFS89 female mature, 1989-2019, 2021-2025 (exclude 2025 from LL)
-surv2_years <- c(1989:2019, 2021:2025)
-surv2_obs <- c(256.73,174.94,199.02,123.48,127.08,122.60,164.96,104.43,101.39,
-               70.18,29.85,93.88,74.84,29.51,38.76,47.74,62.60,50.59,54.45,
-               49.35,50.00,94.96,169.12,143.25,125.67,111.36,81.63,53.12,
-               105.88,165.45,109.23,30.54,21.43,15.30,41.90,147.34)
-surv2_cv <- c(0.3240,0.2100,0.2430,0.2020,0.1660,0.1400,0.1360,0.1510,0.1970,
-              0.2800,0.2380,0.5390,0.2970,0.3190,0.4060,0.2800,0.2230,0.2040,
-              0.3240,0.2350,0.2310,0.1840,0.1920,0.2350,0.2070,0.2140,0.1830,
-              0.2060,0.2190,0.2000,0.1970,0.4430,0.3450,0.2740,0.2290,0.1720)
-
-# Series 3: NMFS82 male mature, 1982-1988
-surv3_years <- 1982:1988
-surv3_obs <- c(170.63,146.95,166.22,69.76,84.32,180.98,245.81)
-surv3_cv  <- c(0.1380,0.1260,0.1180,0.1060,0.1120,0.1070,0.1490)
-
-# Series 4: NMFS89 male mature, same years as series 2
-surv4_years <- surv2_years
-surv4_obs <- c(245.37,348.38,381.69,219.72,175.30,148.74,193.05,263.23,284.08,
-               194.36,91.33,85.94,113.97,82.98,63.10,73.04,117.21,134.74,147.14,
-               121.93,120.89,164.27,154.35,118.04,99.30,153.58,81.16,57.44,
-               87.01,219.79,161.35,59.99,36.50,23.07,61.60,113.01)
-surv4_cv <- c(0.1070,0.1390,0.1470,0.0940,0.1050,0.0840,0.1270,0.1250,0.0950,
-              0.0900,0.0900,0.1360,0.1160,0.2270,0.1190,0.1380,0.1130,0.2600,
-              0.1470,0.1020,0.1280,0.1220,0.1140,0.1190,0.1180,0.1640,0.1180,
-              0.1080,0.1310,0.1700,0.1720,0.1340,0.1490,0.1270,0.1220,0.1470)
+surv1_years <- surv_df$year[surv_df$idx == 1]; surv1_obs <- surv_df$obs[surv_df$idx == 1]; surv1_cv <- surv_df$cv[surv_df$idx == 1]
+surv2_years <- surv_df$year[surv_df$idx == 2]; surv2_obs <- surv_df$obs[surv_df$idx == 2]; surv2_cv <- surv_df$cv[surv_df$idx == 2]
+surv3_years <- surv_df$year[surv_df$idx == 3]; surv3_obs <- surv_df$obs[surv_df$idx == 3]; surv3_cv <- surv_df$cv[surv_df$idx == 3]
+surv4_years <- surv_df$year[surv_df$idx == 4]; surv4_obs <- surv_df$obs[surv_df$idx == 4]; surv4_cv <- surv_df$cv[surv_df$idx == 4]
+cat(sprintf("Loaded survey data: idx1=%d  idx2=%d  idx3=%d  idx4=%d rows\n",
+            length(surv1_obs), length(surv2_obs), length(surv3_obs), length(surv4_obs)))
 
 # log add cv for all surveys (near-zero, adds negligibly)
 log_add_cv <- -9.21034037198
@@ -780,16 +834,12 @@ add_cv_val <- exp(log_add_cv)  # ~0.0001
 # SECTION 12: CATCH LIKELIHOOD (lognormal - full normal)
 # -----------------------------------------------------------------------
 # GMACS uses: catch_sd = sqrt(log(1 + cv^2)); then dnorm(res, catch_sd)
-# dnorm in ADMB = 0.5*log(2*pi) + log(sd) + 0.5*(x/sd)^2 (FULL normal NLL)
+# dnorm in ADMB sums over ALL rows; res = log(obs/pred) when obs>0, else 0
+# (effort=0 in all rows here, so obs=0 -> res=0 but constants still summed).
 lognormal_nll <- function(obs, pred, cv) {
-  # ADMB dnorm with sigma = sqrt(log(1+cv^2))
-  # NLL = sum(0.5*log(2*pi) + log(sigma) + 0.5*(log(obs/pred))^2/sigma^2)
-  # Only include where obs > 0 and pred > 0
-  idx <- obs > 0 & pred > 0
-  if (sum(idx) == 0) return(0)
-  res  <- log(obs[idx] / pred[idx])
-  sig2 <- log(1 + cv[idx]^2)
-  sum(0.5 * log(2 * pi) + 0.5 * log(sig2) + 0.5 * res^2 / sig2)
+  sd  <- sqrt(log(1 + cv^2))
+  res <- ifelse(obs > 0 & pred > 0, log(obs / pred), 0)
+  sum(0.5 * log(2 * pi) + log(sd) + 0.5 * (res / sd)^2)
 }
 
 # Match predicted catch to observed years
@@ -800,9 +850,9 @@ pred_s2 <- pop$pred_catch_disc_mal_pot[pot_ty_idx]
 pred_s3 <- pop$pred_catch_disc_fem_pot[pot_ty_idx]
 pred_s4 <- pop$pred_catch_trawl_both   # all 43 years
 
-nll_catch_s1 <- lognormal_nll(obs_ret_mal_pot,  pred_s1, rep(cv_s1, length(years_pot_obs)))
-nll_catch_s2 <- lognormal_nll(obs_disc_mal_pot, pred_s2, rep(cv_s2, length(years_pot_obs)))
-nll_catch_s3 <- lognormal_nll(obs_disc_fem_pot, pred_s3, rep(cv_s3, length(years_pot_obs)))
+nll_catch_s1 <- lognormal_nll(obs_ret_mal_pot,  pred_s1, cv_s1)
+nll_catch_s2 <- lognormal_nll(obs_disc_mal_pot, pred_s2, cv_s2)
+nll_catch_s3 <- lognormal_nll(obs_disc_fem_pot, pred_s3, cv_s3)
 nll_catch_s4 <- lognormal_nll(obs_trawl_both,   pred_s4, cv_s4)
 
 nll_catch_total <- nll_catch_s1 + nll_catch_s2 + nll_catch_s3 + nll_catch_s4
@@ -842,11 +892,9 @@ survey_nll <- function(obs, pred_vec, obs_cv, years_obs, years_all_ext,
 years_all_ext <- c(years_all, 2025)  # index 1=1982, 44=2025
 
 nll_surv1 <- survey_nll(surv1_obs, pop$pred_surv_fem82, surv1_cv, surv1_years, years_all_ext)
-nll_surv2 <- survey_nll(surv2_obs, pop$pred_surv_fem89, surv2_cv, surv2_years, years_all_ext,
-                         exclude_year = 2025)
+nll_surv2 <- survey_nll(surv2_obs, pop$pred_surv_fem89, surv2_cv, surv2_years, years_all_ext)
 nll_surv3 <- survey_nll(surv3_obs, pop$pred_surv_mal82, surv3_cv, surv3_years, years_all_ext)
-nll_surv4 <- survey_nll(surv4_obs, pop$pred_surv_mal89, surv4_cv, surv4_years, years_all_ext,
-                         exclude_year = 2025)
+nll_surv4 <- survey_nll(surv4_obs, pop$pred_surv_mal89, surv4_cv, surv4_years, years_all_ext)
 
 nll_surv_total <- nll_surv1 + nll_surv2 + nll_surv3 + nll_surv4
 
@@ -855,62 +903,117 @@ cat(sprintf("Survey NLL:  s1=%.5f  s2=%.5f  s3=%.5f  s4=%.5f  TOTAL=%.5f\n",
 cat(sprintf("Expected:    s1~51.82  s2~7.63  s3~94.95  s4~-12.14  TOTAL~142.26\n\n"))
 
 # -----------------------------------------------------------------------
-# SECTION 14: SIZE COMPOSITION DATA (from Gmacsall.out)
+# SECTION 14: SIZE COMPOSITION DATA  [DATA: from .dat; predictions from R]
 # -----------------------------------------------------------------------
-# The size comp data is read from Gmacsall.out lines 1079-1076+
-# Each line: series year fleet season sex type shell mat nsamp obs[22] pred[22]
-# Use observed proportions (DataVec_obs) and Nsamp for multinomial LL
+# Observed proportions and Nsamp loaded directly from the .dat file.
+# Predicted proportions are computed from R's d4_N (run_population output).
 
-# Parse size comp data from Gmacsall.out
-parse_sizecomp_from_file <- function(filepath) {
-  lines <- readLines(filepath, warn = FALSE)
-  start <- grep("^Size_fit_summary:", lines)
-  end_line <- grep("^>EOD<", lines)
-  # Find the first >EOD< after Size_fit_summary
-  end_line <- end_line[end_line > start][1]
-
-  data_lines <- lines[(start + 2):(end_line - 1)]
+# Parse size composition data directly from the .dat file (13 matrices).
+# Row format: Year Season Fleet Sex Type Shell Maturity Nsamp + 22 proportions.
+# Each matrix has its own series number 1..13 in declaration order.
+load_sizecomp_from_dat <- function(dat_path) {
+  lines <- readLines(dat_path, warn = FALSE)
+  # Find "## Number of rows in each matrix" line
+  i_rows <- grep("rows in each matrix", lines)[1]
+  # First numeric line after that header has the row counts
+  i <- i_rows + 1
+  while (i <= length(lines) && !grepl("^\\s*[0-9]", lines[i])) i <- i + 1
+  nrows_per <- as.integer(strsplit(trimws(lines[i]), "\\s+")[[1]])
+  # Advance past header lines until first data row
+  i <- i + 1
+  while (i <= length(lines) && !grepl("^\\s*[0-9]{4}\\s", lines[i])) i <- i + 1
 
   result <- list()
-  for (i in seq_along(data_lines)) {
-    ln <- trimws(data_lines[i])
-    if (nchar(ln) == 0) next
-    parts <- strsplit(ln, "\\s+")[[1]]
-    if (length(parts) < 12) next
+  out_idx <- 0
+  for (series in seq_along(nrows_per)) {
+    for (r in seq_len(nrows_per[series])) {
+      parts <- strsplit(trimws(lines[i]), "\\s+")[[1]]
+      out_idx <- out_idx + 1
+      result[[out_idx]] <- list(
+        series = series,
+        year   = as.integer(parts[1]),
+        season = as.integer(parts[2]),
+        fleet  = as.integer(parts[3]),
+        sex    = as.integer(parts[4]),
+        type   = as.integer(parts[5]),
+        shell  = as.integer(parts[6]),
+        mat    = as.integer(parts[7]),
+        nsamp  = as.numeric(parts[8]),
+        obs    = as.numeric(parts[9:30])
+      )
+      i <- i + 1
+      # Skip blanks / comment lines between rows
+      while (i <= length(lines) &&
+             (nchar(trimws(lines[i])) == 0 || startsWith(trimws(lines[i]), "#"))) i <- i + 1
+    }
+  }
+  result
+}
+sizecomp_data <- load_sizecomp_from_dat(dat_path)
+cat(sprintf("Loaded %d size composition rows from .dat across %d series\n",
+            length(sizecomp_data),
+            length(unique(sapply(sizecomp_data, `[[`, "series")))))
 
-    orig_series <- as.integer(parts[1])
-    mod_series  <- as.integer(parts[2])
-    yr          <- as.integer(parts[3])
-    nsamp       <- as.numeric(parts[10])
-
-    # obs and pred are 22 values each after nsamp
-    obs_start <- 11
-    obs_vals  <- as.numeric(parts[obs_start:(obs_start + 21)])
-    pred_vals <- as.numeric(parts[(obs_start + 22):(obs_start + 43)])
-
-    result[[i]] <- list(
-      series = orig_series,
-      year   = yr,
-      nsamp  = nsamp,
-      obs    = obs_vals,
-      pred   = pred_vals
+# Compute predicted size composition (proportions) for each series and year.
+# Series mapping (from Gmacsall.out Size_fit_summary):
+#   1: Pot male retained             -> catch_N$ret_mal_pot
+#   2: Pot male total                 -> ret + disc male pot
+#   3: Pot female discarded           -> catch_N$disc_fem_pot
+#   4: Trawl female discarded         -> catch_N$trawl_fem
+#   5: Trawl male discarded           -> catch_N$trawl_male
+#   6: NMFS82 female immature         -> surv_N$fem82_imm
+#   7: NMFS89 female immature         -> surv_N$fem89_imm
+#   8: NMFS82 male immature           -> surv_N$mal82_imm
+#   9: NMFS89 male immature           -> surv_N$mal89_imm
+#  10: NMFS82 female mature           -> surv_N$fem82_mat
+#  11: NMFS89 female mature           -> surv_N$fem89_mat
+#  12: NMFS82 male mature             -> surv_N$mal82_mat
+#  13: NMFS89 male mature             -> surv_N$mal89_mat
+get_pred_at_size <- function(series, year) {
+  ty_catch  <- which(years_all == year)
+  ty_survey <- which(c(years_all, 2025) == year)
+  if (series %in% 1:5) {
+    if (length(ty_catch) == 0) return(NULL)
+    vec <- switch(series,
+      `1` = pop$catch_N$ret_mal_pot[ty_catch, ],
+      `2` = pop$catch_N$ret_mal_pot[ty_catch, ] + pop$catch_N$disc_mal_pot[ty_catch, ],
+      `3` = pop$catch_N$disc_fem_pot[ty_catch, ],
+      `4` = pop$catch_N$trawl_fem[ty_catch, ],
+      `5` = pop$catch_N$trawl_male[ty_catch, ]
+    )
+  } else {
+    if (length(ty_survey) == 0) return(NULL)
+    vec <- switch(as.character(series),
+      "6"  = pop$surv_N$fem82_imm[ty_survey, ],
+      "7"  = pop$surv_N$fem89_imm[ty_survey, ],
+      "8"  = pop$surv_N$mal82_imm[ty_survey, ],
+      "9"  = pop$surv_N$mal89_imm[ty_survey, ],
+      "10" = pop$surv_N$fem82_mat[ty_survey, ],
+      "11" = pop$surv_N$fem89_mat[ty_survey, ],
+      "12" = pop$surv_N$mal82_mat[ty_survey, ],
+      "13" = pop$surv_N$mal89_mat[ty_survey, ]
     )
   }
-  result[!sapply(result, is.null)]
+  if (sum(vec) <= 0) return(rep(0, nclass))
+  vec / sum(vec)
 }
 
-sizecomp_data <- parse_sizecomp_from_file(
-  "C:/Users/grant.adams/GitHub/AFSC assessments/snow_crab/Models/25_gmacs_update_plus_group/Gmacsall.out"
-)
+# Attach R-computed predictions to each sizecomp_data record
+for (i in seq_along(sizecomp_data)) {
+  item <- sizecomp_data[[i]]
+  sizecomp_data[[i]]$pred <- get_pred_at_size(item$series, item$year)
+}
 
-# Multinomial log-likelihood
-# LL = N * sum(obs * log(max(pred, eps)))
-# (Uses PREDICTED proportions from ADMB output since we use reported predicted)
-# For reproducing OFV, use the reported predicted values from Gmacsall.out
+# Robust approximation to multinomial (TPL src/robust_multi.cpp):
+#   a = 0.1 / nclass
+#   b = effective N (= nsamp here since log_vn = 0 for all series)
+#   o = obs / sum(obs); p = pred / sum(pred) (post-TINY)
+#   v = a + o*(1-o)
+#   l = 0.5 * (p - o)^2 / v
+#   nll = -sum(log(exp(-b*l) + 0.01)) + 0.5*sum(log(v/b))
 mnll_sizecomp_from_admb <- function(sizecomp_data) {
-  eps <- 1e-10
+  TINY <- 1e-14
   series_nll <- numeric(13)
-  series_counts <- numeric(13)
 
   for (item in sizecomp_data) {
     s   <- item$series
@@ -918,11 +1021,16 @@ mnll_sizecomp_from_admb <- function(sizecomp_data) {
     pred <- item$pred
     N    <- item$nsamp
     if (is.na(s) || s < 1 || s > 13) next
+    if (is.na(N) || N <= 0) next
     if (sum(obs) <= 0) next
 
-    ll_yr <- N * sum(obs * log(pmax(pred, eps)))
-    series_nll[s] <- series_nll[s] + ll_yr
-    series_counts[s] <- series_counts[s] + 1
+    a <- 0.1 / length(obs)
+    o <- obs + TINY; o <- o / sum(o)
+    p <- pred + TINY; p <- p / sum(p)
+    v <- a + o * (1 - o)
+    l <- 0.5 * (p - o)^2 / v
+    nll_row <- -sum(log(exp(-N * l) + 0.01)) + 0.5 * sum(log(v / N))
+    series_nll[s] <- series_nll[s] + nll_row
   }
   series_nll
 }
@@ -943,10 +1051,43 @@ cat(sprintf("Expected:           -29004.09422574\n\n"))
 # -----------------------------------------------------------------------
 # GrowthObsType=1: observed is increment (postmolt - premolt)
 # Formula: pred_inc = alpha[sex] - beta[sex] * premolt (beta<0 => additive)
-# NLL per obs: 0.5*(log(obs_inc/pred_inc))^2/sigma2 + 0.5*log(2*pi*sigma2)
-# sigma2 = log(1 + cv^2)
+# Load growth data directly from .dat file to ensure exact match with ADMB
+load_growth_data <- function(dat_path) {
+  lines <- readLines(dat_path, warn = FALSE)
+  # Find "# nobs_growth" header, then the count, then the rows
+  i_nobs <- grep("nobs_growth", lines)[1]
+  if (is.na(i_nobs)) stop("Could not find nobs_growth in dat file")
+  # Skip blank/comment lines until first numeric row
+  i <- i_nobs + 1
+  while (i <= length(lines) && !grepl("^\\s*[0-9]", lines[i])) i <- i + 1
+  nobs <- as.integer(strsplit(trimws(lines[i]), "\\s+")[[1]][1])
+  i <- i + 1
+  # Skip comment lines (start with #)
+  while (i <= length(lines) && grepl("^\\s*(#|$)", lines[i])) i <- i + 1
+  rows <- list()
+  for (k in seq_len(nobs)) {
+    parts <- strsplit(trimws(lines[i]), "\\s+")[[1]]
+    rows[[k]] <- as.numeric(parts[1:4])
+    i <- i + 1
+  }
+  df <- as.data.frame(do.call(rbind, rows))
+  colnames(df) <- c("premolt", "sex", "inc", "cv")
+  df$sex <- as.integer(df$sex)
+  df
+}
+dat_path <- if (file.exists("25_snow_update_plus_group.dat")) {
+  "25_snow_update_plus_group.dat"
+} else {
+  "/Users/grantadams/Documents/GitHub/AFSC_assessments/snow_crab/Models/25_gmacs_update_plus_group/25_snow_update_plus_group.dat"
+}
+growth_data_raw <- load_growth_data(dat_path)
+cat(sprintf("Loaded %d growth observations from .dat (males=%d, females=%d)\n",
+            nrow(growth_data_raw),
+            sum(growth_data_raw$sex == 1),
+            sum(growth_data_raw$sex == 2)))
 
-growth_data_raw <- read.table(
+# Legacy inline data block (no longer used) ---
+.unused_growth_block <- read.table(
   text = "
 25.20 1 7.60 0.03
 25.20 1 7.60 0.03
@@ -1598,9 +1739,6 @@ cat(sprintf("FM male pot: 1990=%.4f 1991=%.4f 1998=%.4f\n",
     fm_male_pot[which(years_all == 1991)],
     fm_male_pot[which(years_all == 1998)]))
 
-# Check initial N (abundance in millions)
-cat(sprintf("Initial N (1982): male_mat[1]=%g  female_mat[1]=%g\n",
-    N[1, 1, 1], N[3, 1, 1]))  # Note: N not defined here; use pop$N
 N_init_chk <- pop$N
 cat(sprintf("Initial N (1982): male_mat_sc1=%g  fem_mat_sc1=%g\n",
     N_init_chk[1, 1, 1], N_init_chk[3, 1, 1]))
